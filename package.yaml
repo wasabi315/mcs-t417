@@ -1,0 +1,46 @@
+name: mcs-t417
+version: 0.0.1
+license: BSD3
+author: Satoshi Takimoto
+maintainer: wasabi.nvim.st@gmail.com
+copyright: 2024 Satoshi Takimoto
+category: Language
+
+language: GHC2021
+
+default-extensions:
+  - BlockArguments
+  - DeriveAnyClass
+  - DerivingStrategies
+  - DerivingVia
+  - LambdaCase
+  - OverloadedLists
+  - OverloadedRecordDot
+  - NoFieldSelectors
+  - OverloadedStrings
+  - PatternSynonyms
+  - RecordWildCards
+  - Strict
+  - TypeFamilies
+  - ViewPatterns
+
+ghc-options:
+  - -Wall
+  - -Wno-unused-do-bind
+  - -Wmissing-deriving-strategies
+  - -O2
+
+dependencies:
+  - base >=4.17 && < 5
+  - megaparsec
+  - text
+
+library:
+  source-dirs: src
+
+executables:
+  type-search-exe:
+    main: Main.hs
+    source-dirs: app
+    dependencies:
+      - mcs-t417

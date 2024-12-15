@@ -1,0 +1,73 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.37.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           mcs-t417
+version:        0.0.1
+category:       Language
+author:         Satoshi Takimoto
+maintainer:     wasabi.nvim.st@gmail.com
+copyright:      2024 Satoshi Takimoto
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+
+library
+  exposed-modules:
+      Syntax
+  other-modules:
+      Paths_mcs_t417
+  hs-source-dirs:
+      src
+  default-extensions:
+      BlockArguments
+      DeriveAnyClass
+      DerivingStrategies
+      DerivingVia
+      LambdaCase
+      OverloadedLists
+      OverloadedRecordDot
+      NoFieldSelectors
+      OverloadedStrings
+      PatternSynonyms
+      RecordWildCards
+      Strict
+      TypeFamilies
+      ViewPatterns
+  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2
+  build-depends:
+      base >=4.17 && <5
+    , megaparsec
+    , text
+  default-language: GHC2021
+
+executable type-search-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_mcs_t417
+  hs-source-dirs:
+      app
+  default-extensions:
+      BlockArguments
+      DeriveAnyClass
+      DerivingStrategies
+      DerivingVia
+      LambdaCase
+      OverloadedLists
+      OverloadedRecordDot
+      NoFieldSelectors
+      OverloadedStrings
+      PatternSynonyms
+      RecordWildCards
+      Strict
+      TypeFamilies
+      ViewPatterns
+  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2
+  build-depends:
+      base >=4.17 && <5
+    , mcs-t417
+    , megaparsec
+    , text
+  default-language: GHC2021
