@@ -38,8 +38,8 @@ type Term = Located Term'
 
 data Term'
   = Var VarName
-  | Aster
-  | Square
+  | Type
+  | Kind
   | App Term Term
   | Lam VarName Term Term
   | Pi VarName Term Term
@@ -93,8 +93,8 @@ pTerm = located pTerm'
 pTerm' :: Parser Term'
 pTerm' =
   msum @[]
-    [ Aster <$ symbol "*",
-      Square <$ symbol "@",
+    [ Type <$ symbol "*",
+      Kind <$ symbol "@",
       do
         char '%'
         m <- parens pTerm
