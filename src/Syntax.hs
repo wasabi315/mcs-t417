@@ -1,9 +1,14 @@
 module Syntax where
 
 import Control.Monad
-import Data.Char (isAlphaNum)
+import Data.Char
+import Data.List
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.Builder (Builder)
+import Data.Text.Lazy.Builder qualified as B
+import Data.Text.Lazy.Builder.Int qualified as B
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -83,7 +88,7 @@ pVarName = T.singleton <$> lexeme letterChar
 
 pConstName :: Parser ConstName
 pConstName = lexeme do
-  name <- takeWhile1P Nothing isAlphaNum
+  name <- takeWhile1P Nothing ((||) <$> isAlphaNum <*> (== '_'))
   guard (T.length name >= 2)
   pure name
 
@@ -136,3 +141,42 @@ pDef = do
 
 parseText :: FilePath -> Text -> Either (ParseErrorBundle Text Void) [Def]
 parseText = parse (many pDef <* eof)
+
+--------------------------------------------------------------------------------
+-- Prettyprinter
+
+ppTerm :: Term -> Builder
+ppTerm (Located _ t) = ppTerm' t
+
+ppTerm' :: Term' -> Builder
+ppTerm' = \case
+  Var x -> B.fromText x
+  Type -> "*"
+  Kind -> "@"
+  App m n -> "%(" <> ppTerm m <> ")(" <> ppTerm n <> ")"
+  Lam x m n -> "$" <> B.fromText x <> ":(" <> ppTerm m <> ").(" <> ppTerm n <> ")"
+  Pi x m n -> "?" <> B.fromText x <> ":(" <> ppTerm m <> ").(" <> ppTerm n <> ")"
+  Const c ms ->
+    B.fromText c
+      <> "["
+      <> mconcat (intersperse "," (map (\m -> "(" <> ppTerm m <> ")") ms))
+      <> "]"
+
+ppDef :: Def -> Builder
+ppDef Def {..} =
+  mconcat $
+    intersperse "\n" $
+      concat @[]
+        [ [ "def2",
+            B.decimal (length params)
+          ],
+          concatMap (\(x, m) -> [B.fromText x, ppTerm m]) params,
+          [ B.fromText name,
+            ppTerm body,
+            ppTerm retTy,
+            "edef2"
+          ]
+        ]
+
+pretty :: [Def] -> Text
+pretty = TL.toStrict . B.toLazyText . mconcat . intersperse "\n\n" . map ppDef

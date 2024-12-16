@@ -12,4 +12,4 @@ main :: IO ()
 main = do
   src <- T.getContents
   ast <- orDie $ parseText "stdin" src
-  print ast
+  T.putStrLn $ pretty ast
