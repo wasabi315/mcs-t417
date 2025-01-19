@@ -1,5 +1,6 @@
 module T417.Value where
 
+import StrictList qualified as SL
 import T417.Common
 
 --------------------------------------------------------------------------------
@@ -17,7 +18,7 @@ data Value
 
 data Spine
   = SNil
-  | SConstApp [Value]
+  | SConstApp (SL.List Value)
   | SApp Spine Value
 
 type VType = Value

@@ -1,6 +1,8 @@
 module T417.Evaluation where
 
+import Data.Foldable
 import Data.Maybe
+import StrictList qualified as SL
 import T417.Common
 import T417.Syntax
 import T417.Value
@@ -20,8 +22,8 @@ eval tenv lenv = \case
   Lam x m n -> VLam x (eval tenv lenv m) \v -> eval tenv (v : lenv) n
   Pi x m n -> VPi x (eval tenv lenv m) \v -> eval tenv (v : lenv) n
   Const c ms ->
-    let vs = map (eval tenv lenv) ms
-     in VConst c (SConstApp vs) (foldl ($$) (fromJust $ lookup c tenv) vs)
+    let vs = SL.mapReversed (eval tenv lenv) $ SL.fromListReversed ms
+     in VConst c (SConstApp vs) (foldl' ($$) (fromJust $ lookup c tenv) vs)
 
 ($$) :: Value -> Value -> Value
 ($$) = \cases
@@ -57,7 +59,7 @@ quoteSpineVar unf lvl x = \case
 quoteSpineConst :: UnfoldTop -> Lvl -> ConstName -> Spine -> Term
 quoteSpineConst unf lvl c = \case
   SNil -> error "quoteSpineConst: SNil"
-  SConstApp vs -> Const c (map (quote unf lvl) vs)
+  SConstApp vs -> Const c $ SL.toListReversed $ SL.mapReversed (quote unf lvl) vs
   SApp sp m -> App (quoteSpineConst unf lvl c sp) (quote unf lvl m)
 
 --------------------------------------------------------------------------------
@@ -97,6 +99,12 @@ conv lvl cm = \cases
 convSpine :: Lvl -> ConvMode -> Spine -> Spine -> Bool
 convSpine lvl cm = \cases
   SNil SNil -> True
-  (SConstApp vs) (SConstApp vs') -> and $ zipWith (conv lvl cm) vs vs'
+  (SConstApp vs) (SConstApp vs') -> convs lvl cm vs vs'
   (SApp sp v) (SApp sp' v') -> convSpine lvl cm sp sp' && conv lvl cm v v'
+  _ _ -> False
+
+convs :: Lvl -> ConvMode -> SL.List Value -> SL.List Value -> Bool
+convs lvl cm = \cases
+  SL.Nil SL.Nil -> True
+  (SL.Cons v vs) (SL.Cons v' vs') -> convs lvl cm vs vs' && conv lvl cm v v'
   _ _ -> False

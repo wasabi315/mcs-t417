@@ -39,6 +39,7 @@ dependencies:
   - vector
   - prettyprinter
   - containers
+  - strict-list
 
 library:
   source-dirs: src

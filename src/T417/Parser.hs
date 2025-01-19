@@ -95,7 +95,7 @@ pDef = do
   pure Def {..}
 
 parseDefs :: FilePath -> Text -> Either (ParseErrorBundle Text Void) Defs
-parseDefs = parse (fmap Defs (many pDef) <* eof)
+parseDefs = parse (fmap Defs (many pDef) <* optional (symbol "END") <* eof)
 
 --------------------------------------------------------------------------------
 
@@ -112,4 +112,4 @@ pRules = do
   pure $ Rules (V.fromList rs)
 
 parseRules :: FilePath -> Text -> Either (ParseErrorBundle Text Void) Rules
-parseRules = parse (pRules <* symbol "-1")
+parseRules = parse (pRules <* optional (symbol "-1") <* eof)
