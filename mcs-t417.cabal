@@ -16,7 +16,14 @@ build-type:     Simple
 
 library
   exposed-modules:
-      Syntax
+      T417.Common
+      T417.Derivation
+      T417.Evaluation
+      T417.Parser
+      T417.Presyntax
+      T417.Rule
+      T417.Syntax
+      T417.Value
   other-modules:
       Paths_mcs_t417
   hs-source-dirs:
@@ -36,11 +43,16 @@ library
       Strict
       TypeFamilies
       ViewPatterns
+      TemplateHaskell
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2
   build-depends:
       base >=4.17 && <5
+    , containers
     , megaparsec
+    , mtl
+    , prettyprinter
     , text
+    , vector
   default-language: GHC2021
 
 executable type-search-exe
@@ -64,10 +76,15 @@ executable type-search-exe
       Strict
       TypeFamilies
       ViewPatterns
+      TemplateHaskell
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2
   build-depends:
       base >=4.17 && <5
+    , containers
     , mcs-t417
     , megaparsec
+    , mtl
+    , prettyprinter
     , text
+    , vector
   default-language: GHC2021

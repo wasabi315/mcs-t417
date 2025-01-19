@@ -23,6 +23,7 @@ default-extensions:
   - Strict
   - TypeFamilies
   - ViewPatterns
+  - TemplateHaskell
 
 ghc-options:
   - -Wall
@@ -33,7 +34,11 @@ ghc-options:
 dependencies:
   - base >=4.17 && < 5
   - megaparsec
+  - mtl
   - text
+  - vector
+  - prettyprinter
+  - containers
 
 library:
   source-dirs: src

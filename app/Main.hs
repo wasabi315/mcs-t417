@@ -2,8 +2,10 @@ module Main where
 
 import Control.Exception
 import Data.Text.IO qualified as T
-import Syntax
+import Prettyprinter
+import Prettyprinter.Util
 import System.Exit
+import T417.Parser
 
 orDie :: (Exception e) => Either e a -> IO a
 orDie = flip either pure \e -> putStrLn (displayException e) >> exitFailure
@@ -11,5 +13,5 @@ orDie = flip either pure \e -> putStrLn (displayException e) >> exitFailure
 main :: IO ()
 main = do
   src <- T.getContents
-  ast <- orDie $ parseText "stdin" src
-  T.putStrLn $ pretty ast
+  defs <- orDie $ parseDefs "stdin" src
+  putDocW 80 $ pretty defs
