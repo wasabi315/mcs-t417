@@ -105,6 +105,14 @@ pRule =
     <|> (RVar <$> (symbol "var" *> decimal) <*> pVarName)
     <|> (RWeak <$> (symbol "weak" *> decimal) <*> decimal <*> pVarName)
     <|> (RForm <$> (symbol "form" *> decimal) <*> decimal)
+    <|> (RAppl <$> (symbol "appl" *> decimal) <*> decimal)
+    <|> (RAbst <$> (symbol "abst" *> decimal) <*> decimal)
+    <|> (RConv <$> (symbol "conv" *> decimal) <*> decimal)
+    <|> try (RDefPrim <$> (symbol "defpr" *> decimal) <*> decimal <*> pConstName)
+    <|> (RDef <$> (symbol "def" *> decimal) <*> decimal <*> pConstName)
+    <|> (RInst <$> (symbol "inst" *> decimal) <*> many (try (decimal <* notFollowedBy lowerChar)))
+    <|> (RCp <$> (symbol "cp" *> decimal))
+    <|> (RSp <$> (symbol "sp" *> decimal) <*> decimal)
 
 pRules :: Parser Rules
 pRules = do

@@ -1,6 +1,7 @@
 module T417.Rule where
 
 import Data.Vector (Vector)
+import Data.Vector qualified as V
 import Prettyprinter
 import T417.Common
 
@@ -14,6 +15,14 @@ data Rule
   | RVar RuleIx VarName
   | RWeak RuleIx RuleIx VarName
   | RForm RuleIx RuleIx
+  | RAppl RuleIx RuleIx
+  | RAbst RuleIx RuleIx
+  | RConv RuleIx RuleIx
+  | RDef RuleIx RuleIx ConstName
+  | RDefPrim RuleIx RuleIx ConstName
+  | RInst RuleIx [RuleIx]
+  | RCp RuleIx
+  | RSp RuleIx RuleIx
   deriving stock (Show)
 
 newtype Rules = Rules (Vector Rule)
@@ -25,9 +34,24 @@ prettyRule = \case
   RVar i x -> "var" <+> pretty i <+> pretty x
   RWeak i j x -> "weak" <+> pretty i <+> pretty j <+> pretty x
   RForm i j -> "form" <+> pretty i <+> pretty j
+  RAppl i j -> "appl" <+> pretty i <+> pretty j
+  RAbst i j -> "abst" <+> pretty i <+> pretty j
+  RConv i j -> "conv" <+> pretty i <+> pretty j
+  RDef i j c -> "def" <+> pretty i <+> pretty j <+> pretty c
+  RDefPrim i j c -> "defpr" <+> pretty i <+> pretty j <+> pretty c
+  RInst i js -> "inst" <+> pretty i <+> hsep (map pretty js)
+  RCp i -> "cp" <+> pretty i
+  RSp i j -> "sp" <+> pretty i <+> pretty j
 
 instance Pretty Rule where
   pretty = prettyRule
+  {-# INLINE pretty #-}
+
+instance Pretty Rules where
+  pretty (Rules rs) =
+    vsep $
+      zipWith (\i r -> pretty i <+> pretty r) [0 :: Int ..] $
+        V.toList rs
   {-# INLINE pretty #-}
 
 --------------------------------------------------------------------------------
