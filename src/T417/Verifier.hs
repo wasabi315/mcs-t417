@@ -22,7 +22,8 @@ data Judgment = Judgment
 
 instance Pretty Judgment where
   pretty Judgment {..} =
-    ";"
+    concatWith (\x y -> x <> "," <> y) (map (pretty . fst) defs)
+      <+> ";"
       <+> hsep (reverse $ map (\(x, a) -> pretty x <> ":" <> pretty a) ctx)
       <+> "⊢"
       <+> pretty term
@@ -162,7 +163,7 @@ verifyDef jdg1 jdg2 c =
       retTy = jdg2.type_
       body = Just jdg2.term
       def = Def {name = c, params, retTy, body}
-      defs = (c, def) : jdg1.defs
+      defs = jdg1.defs ++ [(c, def)]
    in jdg1 {defs}
 
 verifyDefpr :: Judgment -> Judgment -> ConstName -> Judgment
@@ -178,7 +179,7 @@ verifyInst :: Judgment -> [Judgment] -> Int -> Judgment
 verifyInst jdg jdgs p =
   let _ = expectSort jdg.term
       _ = expectSort jdg.type_
-      (_, def) = jdg.defs !! (length jdg.defs - p - 1)
+      (_, def) = jdg.defs !! p
       term = Const def.name $ map (\jdg' -> jdg'.term) jdgs
       s = zipWith (\(x, _) jdg' -> (x, jdg'.term)) def.params jdgs
       type_ = substMany s def.retTy

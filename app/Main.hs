@@ -15,9 +15,9 @@ orDie = flip either pure \e -> putStrLn (displayException e) >> exitFailure
 
 main :: IO ()
 main = do
-  src <- T.getContents
-  rules <- orDie $ parseRules "stdin" src
+  src <- T.readFile "log"
+  rules <- orDie $ parseRules "log" src
   let jdgs = verify rules
   for_ @[] [0 .. V.length jdgs - 1] \i -> do
-    putDocW 80 $ pretty i <+> pretty (jdgs V.! i)
+    putDocW 80 $ pretty i <+> ":" <+> pretty (jdgs V.! i)
     putStrLn ""

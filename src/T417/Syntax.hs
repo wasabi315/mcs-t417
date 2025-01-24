@@ -1,5 +1,6 @@
 module T417.Syntax where
 
+import Control.Applicative ((<|>))
 import Control.Exception (assert)
 import Data.Functor
 import Data.List
@@ -47,7 +48,7 @@ prettyTerm = \case
   Pi x m n ->
     "?" <> pretty x <> ":" <> parens (prettyTerm m) <> "." <> parens (prettyTerm n)
   Const c ms ->
-    pretty c <> brackets (hsep (punctuate comma (map (parens . prettyTerm) ms)))
+    pretty c <> brackets (mconcat (punctuate comma (map (parens . prettyTerm) ms)))
   TLoc (Located {value}) -> prettyTerm value
 
 instance Pretty Term where

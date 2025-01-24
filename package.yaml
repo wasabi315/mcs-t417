@@ -40,6 +40,8 @@ dependencies:
   - prettyprinter
   - containers
   - strict-list
+  - unordered-containers
+  - hashable
 
 library:
   source-dirs: src

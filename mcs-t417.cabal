@@ -47,11 +47,13 @@ library
   build-depends:
       base >=4.17 && <5
     , containers
+    , hashable
     , megaparsec
     , mtl
     , prettyprinter
     , strict-list
     , text
+    , unordered-containers
     , vector
   default-language: GHC2021
 
@@ -81,11 +83,13 @@ executable type-search-exe
   build-depends:
       base >=4.17 && <5
     , containers
+    , hashable
     , mcs-t417
     , megaparsec
     , mtl
     , prettyprinter
     , strict-list
     , text
+    , unordered-containers
     , vector
   default-language: GHC2021

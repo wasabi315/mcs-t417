@@ -7,6 +7,7 @@ module T417.Common
   )
 where
 
+import Data.Hashable
 import Data.String
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -39,10 +40,10 @@ instance (Pretty a) => Pretty (Located a) where
 --------------------------------------------------------------------------------
 
 newtype VarName = VarName {unVarName :: Text}
-  deriving newtype (Show, Eq, Ord, Pretty, IsString)
+  deriving newtype (Show, Eq, Ord, Pretty, IsString, Hashable)
 
 newtype ConstName = ConstName {unConstName :: Text}
-  deriving newtype (Show, Eq, Ord, Pretty, IsString)
+  deriving newtype (Show, Eq, Ord, Pretty, IsString, Hashable)
 
 freshen :: VarName -> VarName
 freshen (VarName x) =
