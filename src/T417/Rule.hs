@@ -19,10 +19,10 @@ data Rule
   | RAbst RuleIx RuleIx
   | RConv RuleIx RuleIx
   | RDef RuleIx RuleIx ConstName
-  | RDefPrim RuleIx RuleIx ConstName
-  | RInst RuleIx [RuleIx]
+  | RDefpr RuleIx RuleIx ConstName
+  | RInst RuleIx [RuleIx] Int
   | RCp RuleIx
-  | RSp RuleIx RuleIx
+  | RSp RuleIx Int
   deriving stock (Show)
 
 newtype Rules = Rules (Vector Rule)
@@ -38,8 +38,9 @@ prettyRule = \case
   RAbst i j -> "abst" <+> pretty i <+> pretty j
   RConv i j -> "conv" <+> pretty i <+> pretty j
   RDef i j c -> "def" <+> pretty i <+> pretty j <+> pretty c
-  RDefPrim i j c -> "defpr" <+> pretty i <+> pretty j <+> pretty c
-  RInst i js -> "inst" <+> pretty i <+> hsep (map pretty js)
+  RDefpr i j c -> "defpr" <+> pretty i <+> pretty j <+> pretty c
+  RInst i js p ->
+    "inst" <+> pretty i <+> pretty (length js) <+> hsep (map pretty js) <+> pretty p
   RCp i -> "cp" <+> pretty i
   RSp i j -> "sp" <+> pretty i <+> pretty j
 

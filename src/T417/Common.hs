@@ -3,13 +3,16 @@ module T417.Common
     VarName (..),
     ConstName (..),
     freshen,
+    propriocept,
   )
 where
 
-import Data.Set (Set)
-import Data.Set qualified as S
+import Data.String
 import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Unique
 import Prettyprinter
+import System.IO.Unsafe
 import Text.Megaparsec
 
 --------------------------------------------------------------------------------
@@ -35,17 +38,15 @@ instance (Pretty a) => Pretty (Located a) where
 
 --------------------------------------------------------------------------------
 
-newtype VarName = VarName {unVarName :: Char}
-  deriving newtype (Show, Eq, Ord, Pretty)
+newtype VarName = VarName {unVarName :: Text}
+  deriving newtype (Show, Eq, Ord, Pretty, IsString)
 
 newtype ConstName = ConstName {unConstName :: Text}
-  deriving newtype (Show, Eq, Ord, Pretty)
+  deriving newtype (Show, Eq, Ord, Pretty, IsString)
 
-varNameCandiates :: Set VarName
-varNameCandiates = S.fromDistinctAscList $ map VarName "ABCDEFGHIJKLMNOPQRSTUVWXYZabcedfghijklmnopqrstuvwxyz"
-{-# NOINLINE varNameCandiates #-}
+freshen :: VarName -> VarName
+freshen (VarName x) =
+  propriocept \u -> VarName $ T.append x $ T.pack $ show (hashUnique u)
 
-freshen :: [VarName] -> VarName -> VarName
-freshen used x
-  | x `elem` used = S.findMax $ foldr S.delete varNameCandiates used
-  | otherwise = x
+propriocept :: (Unique -> a) -> a
+propriocept f = unsafePerformIO $ f <$> newUnique

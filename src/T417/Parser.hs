@@ -7,8 +7,8 @@ import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Void
 import T417.Common
-import T417.Presyntax
 import T417.Rule
+import T417.Syntax
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
@@ -37,7 +37,7 @@ parens = between (symbol "(") (symbol ")")
 brackets = between (symbol "[") (symbol "]")
 
 pVarName :: Parser VarName
-pVarName = VarName <$> lexeme letterChar
+pVarName = VarName . T.singleton <$> lexeme letterChar
 
 pConstName :: Parser ConstName
 pConstName = lexeme do
@@ -108,9 +108,15 @@ pRule =
     <|> (RAppl <$> (symbol "appl" *> decimal) <*> decimal)
     <|> (RAbst <$> (symbol "abst" *> decimal) <*> decimal)
     <|> (RConv <$> (symbol "conv" *> decimal) <*> decimal)
-    <|> try (RDefPrim <$> (symbol "defpr" *> decimal) <*> decimal <*> pConstName)
+    <|> try (RDefpr <$> (symbol "defpr" *> decimal) <*> decimal <*> pConstName)
     <|> (RDef <$> (symbol "def" *> decimal) <*> decimal <*> pConstName)
-    <|> (RInst <$> (symbol "inst" *> decimal) <*> many (try (decimal <* notFollowedBy lowerChar)))
+    <|> do
+      symbol "inst"
+      i <- decimal
+      n <- decimal
+      js <- replicateM n decimal
+      p <- decimal
+      pure $ RInst i js p
     <|> (RCp <$> (symbol "cp" *> decimal))
     <|> (RSp <$> (symbol "sp" *> decimal) <*> decimal)
 
