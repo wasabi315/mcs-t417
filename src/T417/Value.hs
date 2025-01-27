@@ -5,11 +5,8 @@ import T417.Common
 
 --------------------------------------------------------------------------------
 
-newtype Lvl = Lvl Int
-  deriving newtype (Eq, Ord, Show, Num)
-
 data Value
-  = VVar Lvl Spine
+  = VVar VarName Spine
   | VConst ConstName Spine ~Value
   | VType
   | VKind
