@@ -1,5 +1,6 @@
 module T417.Verifier where
 
+import Control.Exception
 import Data.Coerce
 import Data.Function
 import Data.Vector (Vector)
@@ -180,9 +181,14 @@ verifyInst jdg jdgs p =
   let _ = expectSort jdg.term
       _ = expectSort jdg.type_
       (_, def) = jdg.defs !! p
+      sub = zipWith (\(x, _) jdg' -> (x, jdg'.term)) def.params jdgs
+      -- Check that the types of the arguments match the expected types
+      _ =
+        flip assert () $
+          and $
+            zipWith (\(_, a) jdg' -> alphaEq [] [] (substMany sub a) jdg'.type_) def.params jdgs
       term = Const def.name $ map (\jdg' -> jdg'.term) jdgs
-      s = zipWith (\(x, _) jdg' -> (x, jdg'.term)) def.params jdgs
-      type_ = substMany s def.retTy
+      type_ = substMany sub def.retTy
    in jdg {term, type_}
 
 verifySp :: Judgment -> Int -> Judgment
