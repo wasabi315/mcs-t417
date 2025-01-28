@@ -16,12 +16,12 @@ build-type:     Simple
 
 library
   exposed-modules:
+      T417.AlphaConv
       T417.Common
       T417.Evaluation
       T417.Parser
       T417.Rule
       T417.Syntax
-      T417.Value
       T417.Verifier
   other-modules:
       Paths_mcs_t417
@@ -43,6 +43,8 @@ library
       TypeFamilies
       ViewPatterns
       TemplateHaskell
+      MultiParamTypeClasses
+      FunctionalDependencies
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
   build-depends:
       base >=4.17 && <5
@@ -80,6 +82,8 @@ executable type-search-exe
       TypeFamilies
       ViewPatterns
       TemplateHaskell
+      MultiParamTypeClasses
+      FunctionalDependencies
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
   build-depends:
       base >=4.17 && <5

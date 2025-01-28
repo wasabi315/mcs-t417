@@ -4,6 +4,7 @@ module T417.Common
     ConstName (..),
     freshen,
     propriocept,
+    Applicable (..),
   )
 where
 
@@ -51,3 +52,14 @@ freshen (VarName x) =
 
 propriocept :: (Unique -> a) -> a
 propriocept f = unsafePerformIO $ f <$> newUnique
+
+--------------------------------------------------------------------------------
+
+infixl 5 $$
+
+class Applicable f a b | f a -> b where
+  ($$) :: f -> a -> b
+
+instance Applicable (a -> b) a b where
+  f $$ x = f x
+  {-# INLINE ($$) #-}

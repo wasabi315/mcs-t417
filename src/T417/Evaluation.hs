@@ -5,9 +5,34 @@ import Data.Maybe
 import StrictList qualified as SL
 import T417.Common
 import T417.Syntax
-import T417.Value
 
 --------------------------------------------------------------------------------
+
+data Value
+  = VVar VarName Spine
+  | VConst ConstName Spine ~Value
+  | VPrim ConstName Spine
+  | VType
+  | VKind
+  | VLam VarName VType (Value -> Value)
+  | VPi VarName VType (Value -> VType)
+
+data Spine
+  = SNil
+  | SConstApp (SL.List Value)
+  | SApp Spine Value
+
+type VType = Value
+
+instance Applicable Value Value Value where
+  m $$ n = go m
+    where
+      go = \case
+        VLam _ _ m' -> m' n
+        VVar x sp -> VVar x (sp `SApp` n)
+        VConst c sp m' -> VConst c (sp `SApp` n) (m' $$ n)
+        _ -> error "application of non-function"
+  {-# INLINE ($$) #-}
 
 type TopEnv = [(ConstName, Value)]
 
@@ -23,15 +48,10 @@ eval tenv lenv = \case
   Pi x m n -> VPi x (eval tenv lenv m) \v -> eval tenv ((x, v) : lenv) n
   Const c ms ->
     let vs = SL.mapReversed (eval tenv lenv) $ SL.fromListReversed ms
-     in VConst c (SConstApp vs) (foldl' ($$) (fromJust $ lookup c tenv) vs)
+     in case lookup c tenv of
+          Nothing -> VPrim c (SConstApp vs)
+          Just t -> VConst c (SConstApp vs) (foldl' ($$) t vs)
   TLoc (Located {..}) -> eval tenv lenv value
-
-($$) :: Value -> Value -> Value
-($$) = \cases
-  (VLam _ _ m) n -> m n
-  (VVar x sp) n -> VVar x (sp `SApp` n)
-  (VConst c sp m) n -> VConst c (sp `SApp` n) (m $$ n)
-  _ _ -> error "application of non-function"
 
 --------------------------------------------------------------------------------
 
@@ -43,6 +63,7 @@ quote unf lenv = \case
   VConst c sp m -> case unf of
     UnfoldTop -> quote unf lenv m
     KeepTop -> quoteSpineConst unf lenv c sp
+  VPrim c sp -> quoteSpineConst unf lenv c sp
   VType -> Type
   VKind -> Kind
   VLam (freshen -> x) m n ->

@@ -1,5 +1,6 @@
 module Main where
 
+import System.Environment
 import Control.Exception
 import Data.Text.IO qualified as T
 import System.Exit
@@ -11,6 +12,7 @@ orDie = flip either pure \e -> putStrLn (displayException e) >> exitFailure
 
 main :: IO ()
 main = do
-  src <- T.readFile "bezout_script"
-  rules <- orDie $ parseRules "bezout_script" src
+  [path] <- getArgs
+  src <- T.readFile path
+  rules <- orDie $ parseRules path src
   verify rules

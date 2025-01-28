@@ -24,6 +24,8 @@ default-extensions:
   - TypeFamilies
   - ViewPatterns
   - TemplateHaskell
+  - MultiParamTypeClasses
+  - FunctionalDependencies
 
 ghc-options:
   - -Wall
