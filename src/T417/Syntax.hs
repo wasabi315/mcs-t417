@@ -1,6 +1,5 @@
 module T417.Syntax where
 
-import Control.Applicative ((<|>))
 import Control.Exception (assert)
 import Data.Functor
 import Data.List
@@ -148,8 +147,9 @@ nf defs = go
       Const c ms ->
         let Def {..} = fromJust $ lookup c defs
             _ = assert (length params == length ms) ()
-            Just body' = body
-         in go $ substMany (zipWith (\(x, _) t -> (x, t)) params ms) body'
+         in case body of
+              Nothing -> Const c (map go ms)
+              Just body' -> go $ substMany (zipWith (\(x, _) t -> (x, t)) params ms) body'
       TLoc (Located {..}) -> go value
 
 whnf :: [(ConstName, Def)] -> Term -> Term
@@ -167,6 +167,7 @@ whnf defs = go
       Const c ms ->
         let Def {..} = fromJust $ lookup c defs
             _ = assert (length params == length ms) ()
-            Just body' = body
-         in go $ substMany (zipWith (\(x, _) t -> (x, t)) params ms) body'
+         in case body of
+              Nothing -> Const c (map go ms)
+              Just body' -> go $ substMany (zipWith (\(x, _) t -> (x, t)) params ms) body'
       TLoc (Located {..}) -> go value

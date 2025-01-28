@@ -1,11 +1,13 @@
 module T417.Verifier where
 
+import Control.Applicative ((<|>))
 import Control.Exception
-import Data.Coerce
-import Data.Function
-import Data.Vector (Vector)
-import Data.Vector qualified as V
+import Control.Monad
+import Data.Foldable
+import Data.HashMap.Strict qualified as HM
+import Data.Maybe
 import Prettyprinter
+import Prettyprinter.Util
 import T417.Common
 import T417.Rule
 import T417.Syntax
@@ -23,28 +25,37 @@ data Judgment = Judgment
 
 instance Pretty Judgment where
   pretty Judgment {..} =
-    concatWith (\x y -> x <> "," <> y) (map (pretty . fst) defs)
-      <+> ";"
+    ";"
       <+> hsep (reverse $ map (\(x, a) -> pretty x <> ":" <> pretty a) ctx)
       <+> "⊢"
       <+> pretty term
       <+> ":"
       <+> pretty type_
 
-verify :: Rules -> Vector Judgment
-verify (Rules rs) = fix \ ~jdgs -> flip V.map rs \case
-  RSort -> verifySort
-  RVar (RuleIx i) x -> verifyVar (jdgs V.! i) x
-  RWeak (RuleIx i) (RuleIx j) x -> verifyWeak (jdgs V.! i) (jdgs V.! j) x
-  RForm (RuleIx i) (RuleIx j) -> verifyForm (jdgs V.! i) (jdgs V.! j)
-  RAppl (RuleIx i) (RuleIx j) -> verifyAppl (jdgs V.! i) (jdgs V.! j)
-  RAbst (RuleIx i) (RuleIx j) -> verifyAbst (jdgs V.! i) (jdgs V.! j)
-  RConv (RuleIx i) (RuleIx j) -> verifyConv (jdgs V.! i) (jdgs V.! j)
-  RDef (RuleIx i) (RuleIx j) c -> verifyDef (jdgs V.! i) (jdgs V.! j) c
-  RDefpr (RuleIx i) (RuleIx j) c -> verifyDefpr (jdgs V.! i) (jdgs V.! j) c
-  RInst (RuleIx i) js p -> verifyInst (jdgs V.! i) ((jdgs V.!) . coerce <$> js) p
-  RCp (RuleIx i) -> jdgs V.! i
-  RSp (RuleIx i) j -> verifySp (jdgs V.! i) j
+verify :: Rules -> IO ()
+verify (Rules rs) = void $ foldlM f (HM.empty, HM.empty, 0) rs
+  where
+    f (!tjdgs, !ljdgs, !n) rule = do
+      let lookupJdg (RuleIx i) = fromJust $ HM.lookup i ljdgs <|> HM.lookup i tjdgs
+          jdg = case rule of
+            RSort -> verifySort
+            RVar i x -> verifyVar (lookupJdg i) x
+            RWeak i j x -> verifyWeak (lookupJdg i) (lookupJdg j) x
+            RForm i j -> verifyForm (lookupJdg i) (lookupJdg j)
+            RAppl i j -> verifyAppl (lookupJdg i) (lookupJdg j)
+            RAbst i j -> verifyAbst (lookupJdg i) (lookupJdg j)
+            RConv i j -> verifyConv (lookupJdg i) (lookupJdg j)
+            RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
+            RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
+            RInst i js p -> verifyInst (lookupJdg i) (map lookupJdg js) p
+            RCp i -> lookupJdg i
+            RSp i j -> verifySp (lookupJdg i) j
+      putDocW 80 $ pretty n <+> ":" <+> pretty jdg
+      putStrLn ""
+      pure case rule of
+        RDef {} -> (HM.insert n jdg tjdgs, HM.empty, n + 1)
+        RDefpr {} -> (HM.insert n jdg tjdgs, HM.empty, n + 1)
+        _ -> (tjdgs, HM.insert n jdg ljdgs, n + 1)
 
 expectSort :: Type -> ()
 expectSort = \case
@@ -170,8 +181,9 @@ verifyDef jdg1 jdg2 c =
 verifyDefpr :: Judgment -> Judgment -> ConstName -> Judgment
 verifyDefpr jdg1 jdg2 c =
   let _ = expectFreshConst jdg1.defs c
+      _ = expectSort jdg2.type_
       params = reverse jdg2.ctx
-      retTy = jdg2.type_
+      retTy = jdg2.term
       def = Def {name = c, params, retTy, body = Nothing}
       defs = jdg1.defs ++ [(c, def)]
    in jdg1 {defs}

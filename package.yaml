@@ -19,8 +19,8 @@ default-extensions:
   - NoFieldSelectors
   - OverloadedStrings
   - PatternSynonyms
-  - RecordWildCards
   - Strict
+  - RecordWildCards
   - TypeFamilies
   - ViewPatterns
   - TemplateHaskell
@@ -30,6 +30,7 @@ ghc-options:
   - -Wno-unused-do-bind
   - -Wmissing-deriving-strategies
   - -O2
+  - -funbox-strict-fields
 
 dependencies:
   - base >=4.17 && < 5
@@ -42,6 +43,7 @@ dependencies:
   - strict-list
   - unordered-containers
   - hashable
+  - hashtables
 
 library:
   source-dirs: src

@@ -1,14 +1,13 @@
 module T417.Rule where
 
-import Data.Vector (Vector)
-import Data.Vector qualified as V
+import Data.Hashable
 import Prettyprinter
 import T417.Common
 
 --------------------------------------------------------------------------------
 
 newtype RuleIx = RuleIx Int
-  deriving newtype (Eq, Ord, Show, Num, Pretty)
+  deriving newtype (Eq, Ord, Show, Num, Pretty, Hashable)
 
 data Rule
   = RSort
@@ -25,7 +24,7 @@ data Rule
   | RSp RuleIx Int
   deriving stock (Show)
 
-newtype Rules = Rules (Vector Rule)
+newtype Rules = Rules [Rule]
   deriving newtype (Show)
 
 prettyRule :: Rule -> Doc ann
@@ -50,20 +49,5 @@ instance Pretty Rule where
 
 instance Pretty Rules where
   pretty (Rules rs) =
-    vsep $
-      zipWith (\i r -> pretty i <+> pretty r) [0 :: Int ..] $
-        V.toList rs
+    vsep $ zipWith (\i r -> pretty i <+> pretty r) [0 :: Int ..] rs
   {-# INLINE pretty #-}
-
---------------------------------------------------------------------------------
-
--- -- Δ; Γ ⊢ M : N
--- data Judgment = Judgment
---   { delta :: [()],
---     gamma :: [(VarName, Type)],
---     term :: Term,
---     type_ :: Type
---   }
-
--- verify :: Vector Rule -> Maybe (Vector Judgment)
--- verify = undefined

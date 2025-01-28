@@ -38,16 +38,17 @@ library
       NoFieldSelectors
       OverloadedStrings
       PatternSynonyms
-      RecordWildCards
       Strict
+      RecordWildCards
       TypeFamilies
       ViewPatterns
       TemplateHaskell
-  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2
+  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
   build-depends:
       base >=4.17 && <5
     , containers
     , hashable
+    , hashtables
     , megaparsec
     , mtl
     , prettyprinter
@@ -74,16 +75,17 @@ executable type-search-exe
       NoFieldSelectors
       OverloadedStrings
       PatternSynonyms
-      RecordWildCards
       Strict
+      RecordWildCards
       TypeFamilies
       ViewPatterns
       TemplateHaskell
-  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2
+  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
   build-depends:
       base >=4.17 && <5
     , containers
     , hashable
+    , hashtables
     , mcs-t417
     , megaparsec
     , mtl

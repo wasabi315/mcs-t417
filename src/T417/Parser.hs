@@ -4,7 +4,6 @@ import Control.Monad
 import Data.Char
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Vector qualified as V
 import Data.Void
 import T417.Common
 import T417.Rule
@@ -41,7 +40,7 @@ pVarName = VarName . T.singleton <$> lexeme letterChar
 
 pConstName :: Parser ConstName
 pConstName = lexeme do
-  name <- takeWhile1P Nothing ((||) <$> isAlphaNum <*> (== '_'))
+  name <- takeWhile1P Nothing \c -> isAlphaNum c || c == '_' || c == '-' || c == '.'
   guard (T.length name >= 2)
   pure $ ConstName name
 
@@ -123,7 +122,7 @@ pRule =
 pRules :: Parser Rules
 pRules = do
   rs <- some (decimal @Int *> pRule)
-  pure $ Rules (V.fromList rs)
+  pure $ Rules rs
 
 parseRules :: FilePath -> Text -> Either (ParseErrorBundle Text Void) Rules
 parseRules = parse (pRules <* optional (symbol "-1") <* eof)
