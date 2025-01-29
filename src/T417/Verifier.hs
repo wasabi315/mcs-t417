@@ -16,13 +16,17 @@ import T417.Syntax
 --------------------------------------------------------------------------------
 
 newtype Error = Error String
-  deriving stock (Show)
+
+instance Show Error where
+  show (Error s) = s
 
 instance Exception Error where
   displayException (Error s) = s
 
 throwError :: String -> IO a
 throwError = throwIO . Error
+
+--------------------------------------------------------------------------------
 
 -- Δ; Γ ⊢ M : N
 data Judgment = Judgment
@@ -42,30 +46,7 @@ instance Pretty Judgment where
       <+> ":"
       <+> pretty type_
 
-verify :: Rules -> IO ()
-verify (Rules rs) = void $ foldlM f (HM.empty, HM.empty, 0) rs
-  where
-    f (!tjdgs, !ljdgs, !n) rule = do
-      let lookupJdg (RuleIx i) = fromJust $ HM.lookup i ljdgs <|> HM.lookup i tjdgs
-      jdg <- case rule of
-        RSort -> pure verifySort
-        RVar i x -> verifyVar (lookupJdg i) x
-        RWeak i j x -> verifyWeak (lookupJdg i) (lookupJdg j) x
-        RForm i j -> verifyForm (lookupJdg i) (lookupJdg j)
-        RAppl i j -> verifyAppl (lookupJdg i) (lookupJdg j)
-        RAbst i j -> verifyAbst (lookupJdg i) (lookupJdg j)
-        RConv i j -> verifyConv (lookupJdg i) (lookupJdg j)
-        RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
-        RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
-        RInst i js p -> verifyInst (lookupJdg i) (map lookupJdg js) p
-        RCp i -> pure $! lookupJdg i
-        RSp i j -> verifySp (lookupJdg i) j
-      putDocW 80 $ pretty n <+> ":" <+> pretty jdg
-      putStrLn ""
-      pure case rule of
-        RDef {} -> (HM.insert n jdg tjdgs, HM.empty, n + 1)
-        RDefpr {} -> (HM.insert n jdg tjdgs, HM.empty, n + 1)
-        _ -> (tjdgs, HM.insert n jdg ljdgs, n + 1)
+--------------------------------------------------------------------------------
 
 expectSort :: Type -> IO ()
 expectSort = \case
@@ -91,32 +72,62 @@ expectFreshConst defs c = case lookup c defs of
 
 expectAlphaEq :: ATerm -> ATerm -> IO ()
 expectAlphaEq t u
-  | aalphaEq t u = pure ()
+  | alphaConv t u = pure ()
   | otherwise = throwError "expected alpha-equivalent"
 
 expectAlphaEqCtx :: [(VarName, AType)] -> [(VarName, AType)] -> IO ()
 expectAlphaEqCtx ctx1 ctx2
-  | and (zipWith (\(x, a) (y, b) -> x == y && aalphaEq a b) ctx1 ctx2) = pure ()
+  | and (zipWith (\(x, a) (y, b) -> x == y && alphaConv a b) ctx1 ctx2) = pure ()
   | otherwise = throwError "expected alpha-equivalent contexts"
 
 expectBetaDeltaEq :: [(ConstName, Def)] -> Term -> Term -> IO ()
 expectBetaDeltaEq defs t u
-  | alphaEq [] [] t' u' = pure ()
+  | nalphaEq (Rigid 0) [] [] t' u' = pure ()
   | otherwise =
-      throwError $ "expected beta-delta-equivalent: " ++ show (pretty t') ++ " and " ++ show (pretty u')
+      throwError $ "expected beta-delta-equivalent:\n" ++ show (pretty $ fromNf t') ++ " and\n" ++ show (pretty $ fromNf u')
   where
     t' = nf defs t
     u' = nf defs u
 
-expectAPi :: AType -> IO (VarName, AType, AClosure)
+expectAPi :: AType -> IO (AType, AClosure)
 expectAPi = \case
-  APi x a b -> pure (x, a, b)
+  APi a b -> pure (a, b)
   _ -> throwError "expected Pi"
 
 expectSameVar :: VarName -> VarName -> IO ()
 expectSameVar x y
   | x == y = pure ()
   | otherwise = throwError "expected same variable"
+
+expectNonEmpty :: [a] -> IO (a, [a])
+expectNonEmpty [] = throwError "expected non-empty list"
+expectNonEmpty (x : xs) = pure (x, xs)
+
+--------------------------------------------------------------------------------
+
+verify :: Rules -> IO ()
+verify (Rules rs) = void $ foldlM f (HM.empty, HM.empty, 0) rs
+  where
+    f (!tjdgs, !ljdgs, !n) rule = do
+      let lookupJdg (RuleIx i) = fromJust $ HM.lookup i ljdgs <|> HM.lookup i tjdgs
+      jdg <- case rule of
+        RSort -> pure verifySort
+        RVar i x -> verifyVar (lookupJdg i) x
+        RWeak i j x -> verifyWeak (lookupJdg i) (lookupJdg j) x
+        RForm i j -> verifyForm (lookupJdg i) (lookupJdg j)
+        RAppl i j -> verifyAppl (lookupJdg i) (lookupJdg j)
+        RAbst i j -> verifyAbst (lookupJdg i) (lookupJdg j)
+        RConv i j -> verifyConv (lookupJdg i) (lookupJdg j)
+        RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
+        RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
+        RInst i js p -> verifyInst (lookupJdg i) (map lookupJdg js) p
+        RCp i -> pure $! lookupJdg i
+        RSp i j -> verifySp (lookupJdg i) j
+      putDocW 80 $ pretty n <+> ":" <+> pretty jdg <> line
+      pure case rule of
+        RDef {} -> (HM.insert n jdg tjdgs, HM.empty, n + 1)
+        RDefpr {} -> (HM.insert n jdg tjdgs, HM.empty, n + 1)
+        _ -> (tjdgs, HM.insert n jdg ljdgs, n + 1)
 
 verifySort :: Judgment
 verifySort =
@@ -159,7 +170,7 @@ verifyForm jdg1 jdg2 = do
 
 verifyAppl :: Judgment -> Judgment -> IO Judgment
 verifyAppl jdg1 jdg2 = do
-  (_, a, b) <- expectAPi jdg1.type_
+  (a, b) <- expectAPi jdg1.type_
   expectAlphaEq a jdg2.type_
   expectAlphaEqCtx jdg1.ctx jdg2.ctx
   let term = App jdg1.term jdg2.term
@@ -170,9 +181,9 @@ verifyAppl jdg1 jdg2 = do
 verifyAbst :: Judgment -> Judgment -> IO Judgment
 verifyAbst jdg1 jdg2 = do
   expectASort jdg2.type_
-  let ((x, a) : ctx) = jdg1.ctx
-      type_ = toATerm [] jdg2.term
-  (x', a', b') <- expectAPi type_
+  ((x, a), ctx) <- expectNonEmpty jdg1.ctx
+  let type_ = toATerm [] jdg2.term
+  (a', b'@(AClosure x' _ _)) <- expectAPi type_
   expectSameVar x x'
   expectAlphaEq a a'
   expectAlphaEq jdg1.type_ (b' $$ AVar x)
@@ -195,7 +206,7 @@ verifyDef jdg1 jdg2 c = do
       retTy = fromATerm jdg2.type_
       body = Just jdg2.term
       def = Def {name = c, params, retTy, body}
-      defs = jdg1.defs ++ [(c, def)]
+      defs = (c, def) : jdg1.defs
   pure $! jdg1 {defs}
 
 verifyDefpr :: Judgment -> Judgment -> ConstName -> IO Judgment
@@ -205,20 +216,20 @@ verifyDefpr jdg1 jdg2 c = do
   let params = reverse $ map (\(x, a) -> (x, fromATerm a)) jdg2.ctx
       retTy = jdg2.term
       def = Def {name = c, params, retTy, body = Nothing}
-      defs = jdg1.defs ++ [(c, def)]
+      defs = (c, def) : jdg1.defs
   pure $! jdg1 {defs}
 
 verifyInst :: Judgment -> [Judgment] -> Int -> IO Judgment
 verifyInst jdg jdgs p = do
   expectSort jdg.term
   expectASort jdg.type_
-  let (_, def) = jdg.defs !! p
+  let (_, def) = jdg.defs !! (length jdg.defs - p - 1)
       sub = zipWith (\(x, _) jdg' -> (x, jdg'.term)) def.params jdgs
       -- Check that the types of the arguments match the expected types
       _ =
         flip assert () $
           and $
-            zipWith (\(_, a) jdg' -> aalphaEq (toATerm [] $ substMany sub a) jdg'.type_) def.params jdgs
+            zipWith (\(_, a) jdg' -> alphaConv (toATerm [] $ substMany sub a) jdg'.type_) def.params jdgs
       term = Const def.name $ map (\jdg' -> jdg'.term) jdgs
       type_ = toATerm [] $ substMany sub def.retTy
   pure $! jdg {term, type_}

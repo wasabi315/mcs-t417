@@ -13,8 +13,8 @@ data ATerm
   | AType
   | AKind
   | AApp ATerm ATerm
-  | ALam VarName ATerm AClosure
-  | APi VarName ATerm AClosure
+  | ALam ATerm AClosure
+  | APi ATerm AClosure
   | AConst ConstName (SL.List ATerm)
   deriving stock (Show)
 
@@ -32,8 +32,8 @@ toATerm env = \case
   Type -> AType
   Kind -> AKind
   App m n -> AApp (toATerm env m) (toATerm env n)
-  Lam x m n -> ALam x (toATerm env m) (AClosure x env n)
-  Pi x m n -> APi x (toATerm env m) (AClosure x env n)
+  Lam x m n -> ALam (toATerm env m) (AClosure x env n)
+  Pi x m n -> APi (toATerm env m) (AClosure x env n)
   Const c ms -> AConst c $ SL.mapReversed (toATerm env) $ SL.fromListReversed ms
   TLoc (Located {..}) -> toATerm env value
 
@@ -47,25 +47,25 @@ fromATerm = \case
   AType -> Type
   AKind -> Kind
   AApp m n -> App (fromATerm m) (fromATerm n)
-  ALam x m n ->
+  ALam m n@(AClosure x _ _) ->
     Lam x (fromATerm m) (fromATerm $ n $$ AVar x)
-  APi x m n ->
+  APi m n@(AClosure x _ _) ->
     Pi x (fromATerm m) (fromATerm $ n $$ AVar x)
   AConst c ms -> Const c $ SL.toListReversed $ SL.mapReversed fromATerm ms
 
-aalphaEq :: ATerm -> ATerm -> Bool
-aalphaEq = \cases
+alphaConv :: ATerm -> ATerm -> Bool
+alphaConv = \cases
   (AVar x) (AVar x') -> x == x'
   AType AType -> True
   AKind AKind -> True
-  (AApp m n) (AApp m' n') -> aalphaEq m m' && aalphaEq n n'
-  (ALam x m n) (ALam _ m' n') -> aalphaEq m m' && aalphaEq (n $$ AVar x) (n' $$ AVar x)
-  (APi x m n) (APi _ m' n') -> aalphaEq m m' && aalphaEq (n $$ AVar x) (n' $$ AVar x)
-  (AConst c ms) (AConst c' ns) -> c == c' && aalphaEqs ms ns
+  (AApp m n) (AApp m' n') -> alphaConv m m' && alphaConv n n'
+  (ALam m n@(AClosure x _ _)) (ALam m' n') -> alphaConv m m' && alphaConv (n $$ AVar x) (n' $$ AVar x)
+  (APi m n@(AClosure x _ _)) (APi m' n') -> alphaConv m m' && alphaConv (n $$ AVar x) (n' $$ AVar x)
+  (AConst c ms) (AConst c' ns) -> c == c' && alphaConvs ms ns
   _ _ -> False
 
-aalphaEqs :: SL.List ATerm -> SL.List ATerm -> Bool
-aalphaEqs = \cases
+alphaConvs :: SL.List ATerm -> SL.List ATerm -> Bool
+alphaConvs = \cases
   SL.Nil SL.Nil -> True
-  (SL.Cons m ms) (SL.Cons n ns) -> aalphaEqs ms ns && aalphaEq m n
+  (SL.Cons m ms) (SL.Cons n ns) -> alphaConvs ms ns && alphaConv m n
   _ _ -> False

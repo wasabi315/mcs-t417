@@ -4,7 +4,7 @@ import Data.Foldable
 import Data.Maybe
 import StrictList qualified as SL
 import T417.Common
-import T417.Syntax
+import T417.Syntax hiding (ConvMode (..), Spine (..))
 
 --------------------------------------------------------------------------------
 
@@ -14,29 +14,29 @@ data Value
   | VPrim ConstName Spine
   | VType
   | VKind
-  | VLam VarName VType (Value -> Value)
-  | VPi VarName VType (Value -> VType)
+  | VLam VType Closure
+  | VPi VType Closure
+  deriving stock (Show)
 
 data Spine
   = SNil
   | SConstApp (SL.List Value)
   | SApp Spine Value
+  deriving stock (Show)
+
+data TopClosure = TopClosure [VarName] TopEnv Term
+  deriving stock (Show)
+
+data Closure = Closure VarName TopEnv LocalEnv Term
+  deriving stock (Show)
 
 type VType = Value
 
-instance Applicable Value Value Value where
-  m $$ n = go m
-    where
-      go = \case
-        VLam _ _ m' -> m' n
-        VVar x sp -> VVar x (sp `SApp` n)
-        VConst c sp m' -> VConst c (sp `SApp` n) (m' $$ n)
-        _ -> error "application of non-function"
-  {-# INLINE ($$) #-}
-
-type TopEnv = [(ConstName, Value)]
+type TopEnv = [(ConstName, TopClosure)]
 
 type LocalEnv = [(VarName, Value)]
+
+--------------------------------------------------------------------------------
 
 eval :: TopEnv -> LocalEnv -> Term -> Value
 eval tenv lenv = \case
@@ -44,14 +44,33 @@ eval tenv lenv = \case
   Type -> VType
   Kind -> VKind
   App m n -> eval tenv lenv m $$ eval tenv lenv n
-  Lam x m n -> VLam x (eval tenv lenv m) \v -> eval tenv ((x, v) : lenv) n
-  Pi x m n -> VPi x (eval tenv lenv m) \v -> eval tenv ((x, v) : lenv) n
+  Lam x m n -> VLam (eval tenv lenv m) $ Closure x tenv lenv n
+  Pi x m n -> VPi (eval tenv lenv m) $ Closure x tenv lenv n
   Const c ms ->
     let vs = SL.mapReversed (eval tenv lenv) $ SL.fromListReversed ms
      in case lookup c tenv of
           Nothing -> VPrim c (SConstApp vs)
-          Just t -> VConst c (SConstApp vs) (foldl' ($$) t vs)
+          Just t -> VConst c (SConstApp vs) (t $$ toList vs)
   TLoc (Located {..}) -> eval tenv lenv value
+
+instance Applicable Closure Value Value where
+  Closure x tenv lenv m $$ n = eval tenv ((x, n) : lenv) m
+  {-# INLINE ($$) #-}
+
+instance Applicable TopClosure [Value] Value where
+  -- assume that the length of xs and vs are the same
+  TopClosure xs tenv m $$ vs = eval tenv (zip xs vs) m
+  {-# INLINE ($$) #-}
+
+instance Applicable Value Value Value where
+  m $$ n = go m
+    where
+      go = \case
+        VLam _ m' -> m' $$ n
+        VVar x sp -> VVar x (sp `SApp` n)
+        VConst c sp m' -> VConst c (sp `SApp` n) (m' $$ n)
+        _ -> error "application of non-function"
+  {-# INLINE ($$) #-}
 
 --------------------------------------------------------------------------------
 
@@ -66,12 +85,12 @@ quote unf lenv = \case
   VPrim c sp -> quoteSpineConst unf lenv c sp
   VType -> Type
   VKind -> Kind
-  VLam (freshen -> x) m n ->
+  VLam m n@(Closure (freshen -> x) _ _ _) ->
     let v = VVar x SNil
-     in Lam x (quote unf lenv m) (quote unf ((x, v) : lenv) $ n v)
-  VPi (freshen -> x) a b ->
+     in Lam x (quote unf lenv m) (quote unf ((x, v) : lenv) $ n $$ v)
+  VPi a b@(Closure (freshen -> x) _ _ _) ->
     let v = VVar x SNil
-     in Pi x (quote unf lenv a) (quote unf ((x, v) : lenv) $ b v)
+     in Pi x (quote unf lenv a) (quote unf ((x, v) : lenv) $ b $$ v)
 
 quoteSpineVar :: UnfoldTop -> LocalEnv -> VarName -> Spine -> Term
 quoteSpineVar unf lvl x = \case
@@ -86,48 +105,48 @@ quoteSpineConst unf lvl c = \case
   SApp sp m -> App (quoteSpineConst unf lvl c sp) (quote unf lvl m)
 
 --------------------------------------------------------------------------------
--- β-conversion
+-- βδ-conversion
 
 data ConvMode = Rigid | Flex | Full
 
-conv :: LocalEnv -> ConvMode -> Value -> Value -> Bool
-conv lenv cm = \cases
-  (VVar x sp) (VVar x' sp') -> x == x' && convSpine lenv cm sp sp'
+bdConv :: LocalEnv -> ConvMode -> Value -> Value -> Bool
+bdConv lenv cm = \cases
+  (VVar x sp) (VVar x' sp') -> x == x' && bdConvSpine lenv cm sp sp'
   VType VType -> True
   VKind VKind -> True
-  (VLam (freshen -> x) _ m) (VLam _ _ m') ->
+  (VLam _ m@(Closure (freshen -> x) _ _ _)) (VLam _ m') ->
     let v = VVar x SNil
-     in conv ((x, v) : lenv) cm (m v) (m' v)
-  (VPi (freshen -> x) a b) (VPi _ a' b') ->
+     in bdConv ((x, v) : lenv) cm (m $$ v) (m' $$ v)
+  (VPi a b@(Closure (freshen -> x) _ _ _)) (VPi a' b') ->
     let v = VVar x SNil
-     in conv lenv cm a a' && conv ((x, v) : lenv) cm (b v) (b' v)
+     in bdConv lenv cm a a' && bdConv ((x, v) : lenv) cm (b $$ v) (b' $$ v)
   (VConst c sp m) (VConst c' sp' m') -> case cm of
     Rigid
-      | c == c' -> convSpine lenv Flex sp sp' || conv lenv Full m m'
-      | otherwise -> conv lenv Rigid m m'
+      | c == c' -> bdConvSpine lenv Flex sp sp' || bdConv lenv Full m m'
+      | otherwise -> bdConv lenv Rigid m m'
     Flex
-      | c == c' -> convSpine lenv Flex sp sp'
+      | c == c' -> bdConvSpine lenv Flex sp sp'
       | otherwise -> False
-    Full -> conv lenv Full m m'
+    Full -> bdConv lenv Full m m'
   (VConst _ _ m) m' -> case cm of
-    Rigid -> conv lenv Rigid m m'
+    Rigid -> bdConv lenv Rigid m m'
     Flex -> False
-    Full -> conv lenv Full m m'
+    Full -> bdConv lenv Full m m'
   m (VConst _ _ m') -> case cm of
-    Rigid -> conv lenv Rigid m m'
+    Rigid -> bdConv lenv Rigid m m'
     Flex -> False
-    Full -> conv lenv Full m m'
+    Full -> bdConv lenv Full m m'
   _ _ -> False
 
-convSpine :: LocalEnv -> ConvMode -> Spine -> Spine -> Bool
-convSpine lvl cm = \cases
+bdConvSpine :: LocalEnv -> ConvMode -> Spine -> Spine -> Bool
+bdConvSpine lvl cm = \cases
   SNil SNil -> True
-  (SConstApp vs) (SConstApp vs') -> convs lvl cm vs vs'
-  (SApp sp v) (SApp sp' v') -> convSpine lvl cm sp sp' && conv lvl cm v v'
+  (SConstApp vs) (SConstApp vs') -> bdConvs lvl cm vs vs'
+  (SApp sp v) (SApp sp' v') -> bdConvSpine lvl cm sp sp' && bdConv lvl cm v v'
   _ _ -> False
 
-convs :: LocalEnv -> ConvMode -> SL.List Value -> SL.List Value -> Bool
-convs lvl cm = \cases
+bdConvs :: LocalEnv -> ConvMode -> SL.List Value -> SL.List Value -> Bool
+bdConvs lvl cm = \cases
   SL.Nil SL.Nil -> True
-  (SL.Cons v vs) (SL.Cons v' vs') -> convs lvl cm vs vs' && conv lvl cm v v'
+  (SL.Cons v vs) (SL.Cons v' vs') -> bdConvs lvl cm vs vs' && bdConv lvl cm v v'
   _ _ -> False
