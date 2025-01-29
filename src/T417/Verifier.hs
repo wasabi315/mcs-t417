@@ -82,7 +82,7 @@ expectAlphaEqCtx ctx1 ctx2
 
 expectBetaDeltaEq :: [(ConstName, Def)] -> Term -> Term -> IO ()
 expectBetaDeltaEq defs t u
-  | nalphaEq (Rigid 0) [] [] t' u' = pure ()
+  | nalphaEq Rigid [] [] t' u' = pure ()
   | otherwise =
       throwError $ "expected beta-delta-equivalent:\n" ++ show (pretty $ fromNf t') ++ " and\n" ++ show (pretty $ fromNf u')
   where

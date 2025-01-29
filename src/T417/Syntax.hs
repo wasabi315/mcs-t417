@@ -3,7 +3,6 @@ module T417.Syntax where
 import Data.Functor
 import Data.List
 import Data.Maybe
-import Debug.Trace
 import Prettyprinter
 import StrictList as SL
 import T417.Common
@@ -274,10 +273,9 @@ substSpine from to = \case
   SConstApp ms -> SConstApp $ substNf from to <$> ms
   SApp sp m -> SApp (substSpine from to sp) (substNf from to m)
 
-data ConvMode = Rigid Int | Flex
+data ConvMode = Rigid | Flex Int
 
 nalphaEq :: ConvMode -> [VarName] -> [VarName] -> Nf -> Nf -> Bool
-nalphaEq (Rigid 32) _ _ = \_ _ -> trace "giving up" True
 nalphaEq cm vs vs' = \cases
   (NVar x sp) (NVar x' sp') -> case (elemIndex x vs, elemIndex x' vs') of
     (Just i, Just i') -> i == i' && nalphaEqSpine cm vs vs' sp sp'
@@ -289,18 +287,23 @@ nalphaEq cm vs vs' = \cases
   (NPi x m n) (NPi x' m' n') -> nalphaEq cm vs vs' m m' && nalphaEq cm (x : vs) (x' : vs') n n'
   (NPrim c sp) (NPrim c' sp') -> c == c' && nalphaEqSpine cm vs vs' sp sp'
   (NConst c sp m) (NConst c' sp' m') -> case cm of
-    Rigid n
-      | c == c' -> nalphaEqSpine Flex vs vs' sp sp' || nalphaEq (Rigid (n + 1)) vs vs' m m'
+    Rigid
+      | c == c' -> nalphaEqSpine (Flex 32) vs vs' sp sp' || nalphaEq Rigid vs vs' m m'
       | otherwise -> nalphaEq cm vs vs' m m'
-    Flex
-      | c == c' -> nalphaEqSpine Flex vs vs' sp sp'
+    Flex 0
+      | c == c' -> nalphaEqSpine (Flex 0) vs vs' sp sp'
       | otherwise -> False
+    Flex n
+      | c == c' -> nalphaEqSpine (Flex n) vs vs' sp sp'
+      | otherwise -> nalphaEq (Flex (n - 1)) vs vs' m m'
   (NConst _ _ m) m' -> case cm of
-    Rigid _ -> nalphaEq cm vs vs' m m'
-    Flex -> False
+    Rigid -> nalphaEq cm vs vs' m m'
+    Flex 0 -> False
+    Flex n -> nalphaEq (Flex (n - 1)) vs vs' m m'
   m (NConst _ _ m') -> case cm of
-    Rigid _ -> nalphaEq cm vs vs' m m'
-    Flex -> False
+    Rigid -> nalphaEq cm vs vs' m m'
+    Flex 0 -> False
+    Flex n -> nalphaEq (Flex (n - 1)) vs vs' m m'
   _ _ -> False
 
 nalphaEqSpine :: ConvMode -> [VarName] -> [VarName] -> Spine -> Spine -> Bool
