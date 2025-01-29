@@ -48,7 +48,7 @@ newtype ConstName = ConstName {unConstName :: Text}
 
 freshen :: VarName -> VarName
 freshen (VarName x) =
-  propriocept \u -> VarName $ T.append x $ T.pack $ show (hashUnique u)
+  propriocept \u -> VarName $ "#" <> x <> T.pack (show $ hashUnique u)
 
 propriocept :: (Unique -> a) -> a
 propriocept f = unsafePerformIO $ f <$> newUnique

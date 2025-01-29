@@ -45,6 +45,7 @@ library
       TemplateHaskell
       MultiParamTypeClasses
       FunctionalDependencies
+      GADTs
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
   build-depends:
       base >=4.17 && <5
@@ -84,6 +85,7 @@ executable type-search-exe
       TemplateHaskell
       MultiParamTypeClasses
       FunctionalDependencies
+      GADTs
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
   build-depends:
       base >=4.17 && <5

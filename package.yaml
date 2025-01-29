@@ -26,6 +26,7 @@ default-extensions:
   - TemplateHaskell
   - MultiParamTypeClasses
   - FunctionalDependencies
+  - GADTs
 
 ghc-options:
   - -Wall

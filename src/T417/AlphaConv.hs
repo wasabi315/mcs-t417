@@ -20,22 +20,33 @@ data ATerm
 
 type AType = ATerm
 
+data ATopClosure where
+  ATopClosure :: [(VarName, AType, a)] -> Term -> ATopClosure
+
 data AClosure = AClosure VarName [(VarName, ATerm)] Term
   deriving stock (Show)
 
 instance Pretty ATerm where
   pretty a = pretty (fromATerm a)
 
+instance Applicable ATerm ATerm ATerm where
+  m $$ n = AApp m n
+  {-# INLINE ($$) #-}
+
 toATerm :: [(VarName, ATerm)] -> Term -> ATerm
 toATerm env = \case
   Var x -> fromMaybe (AVar x) $ lookup x env
   Type -> AType
   Kind -> AKind
-  App m n -> AApp (toATerm env m) (toATerm env n)
+  App m n -> toATerm env m $$ toATerm env n
   Lam x m n -> ALam (toATerm env m) (AClosure x env n)
   Pi x m n -> APi (toATerm env m) (AClosure x env n)
   Const c ms -> AConst c $ SL.mapReversed (toATerm env) $ SL.fromListReversed ms
   TLoc (Located {..}) -> toATerm env value
+
+instance Applicable ATopClosure [ATerm] ATerm where
+  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _, _) n -> (x, n)) xs (reverse ns)) m
+  {-# INLINE ($$) #-}
 
 instance Applicable AClosure ATerm ATerm where
   AClosure x env m $$ n = toATerm ((x, n) : env) m
