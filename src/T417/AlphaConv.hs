@@ -41,11 +41,12 @@ toATerm env = \case
   App m n -> toATerm env m $$ toATerm env n
   Lam x m n -> ALam (toATerm env m) (AClosure x env n)
   Pi x m n -> APi (toATerm env m) (AClosure x env n)
-  Const c ms -> AConst c $ SL.mapReversed (toATerm env) $ SL.fromListReversed ms
+  Const c ms -> AConst c $ toATerm env <$> ms
   TLoc (Located {..}) -> toATerm env value
 
-instance Applicable ATopClosure [ATerm] ATerm where
-  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _, _) n -> (x, n)) xs (reverse ns)) m
+instance Applicable ATopClosure (SL.List ATerm) ATerm where
+  -- strict in the arguments
+  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _, _) n -> (x, n)) xs (SL.toListReversed ns)) m
   {-# INLINE ($$) #-}
 
 instance Applicable AClosure ATerm ATerm where
@@ -62,7 +63,7 @@ fromATerm = \case
     Lam x (fromATerm m) (fromATerm $ n $$ AVar x)
   APi m n@(AClosure x _ _) ->
     Pi x (fromATerm m) (fromATerm $ n $$ AVar x)
-  AConst c ms -> Const c $ SL.toListReversed $ SL.mapReversed fromATerm ms
+  AConst c ms -> Const c $ fromATerm <$> ms
 
 alphaConv :: ATerm -> ATerm -> Bool
 alphaConv = \cases

@@ -61,7 +61,7 @@ library
     , vector
   default-language: GHC2021
 
-executable type-search-exe
+executable mcs-t417-exe
   main-is: Main.hs
   other-modules:
       Paths_mcs_t417

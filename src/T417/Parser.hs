@@ -5,6 +5,7 @@ import Data.Char
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void
+import GHC.IsList
 import T417.Common
 import T417.Rule
 import T417.Syntax
@@ -78,7 +79,7 @@ pTerm' =
       try do
         c <- pConstName
         args <- brackets (parens pTerm `sepBy` symbol ",")
-        pure $ Const c args,
+        pure $ Const c (fromList args),
       Var <$> pVarName
     ]
 
@@ -115,7 +116,7 @@ pRule =
       n <- decimal
       js <- replicateM n decimal
       p <- decimal
-      pure $ RInst i js p
+      pure $ RInst i (fromList js) p
     <|> (RCp <$> (symbol "cp" *> decimal))
     <|> (RSp <$> (symbol "sp" *> decimal) <*> decimal)
 

@@ -1,7 +1,9 @@
 module T417.Syntax where
 
 import Data.Functor
+import Data.String
 import Prettyprinter
+import StrictList qualified as SL
 import T417.Common
 
 --------------------------------------------------------------------------------
@@ -13,11 +15,15 @@ data Term
   | App Term Term
   | Lam VarName Term Term
   | Pi VarName Term Term
-  | Const ConstName [Term]
+  | Const ConstName (SL.List Term)
   | TLoc (Located Term)
   deriving stock (Show)
 
 type Type = Term
+
+instance IsString Term where
+  fromString = Var . fromString
+  {-# INLINE fromString #-}
 
 instance Applicable Term Term Term where
   m $$ n = App m n
@@ -48,7 +54,8 @@ prettyTerm = \case
   Pi x m n ->
     "?" <> pretty x <> ":" <> parens (prettyTerm m) <> "." <> parens (prettyTerm n)
   Const c ms ->
-    pretty c <> brackets (mconcat (punctuate comma (map (parens . prettyTerm) ms)))
+    pretty c
+      <> brackets (mconcat (punctuate comma (SL.toListReversed $ SL.mapReversed (parens . prettyTerm) ms)))
   TLoc (Located {value}) -> prettyTerm value
 
 instance Pretty Term where

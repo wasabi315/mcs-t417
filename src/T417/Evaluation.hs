@@ -1,6 +1,5 @@
 module T417.Evaluation where
 
-import Data.Foldable
 import Data.Maybe
 import StrictList qualified as SL
 import T417.AlphaConv
@@ -17,16 +16,19 @@ data Value
   | VKind
   | VLam VType Closure
   | VPi VType Closure
+  deriving stock (Show)
 
 data Spine
   = SNil
   | SConstApp (SL.List Value)
   | SApp Spine Value
+  deriving stock (Show)
 
-data TopClosure where
-  TopClosure :: [(VarName, AType, VType)] -> TopEnv -> Term -> TopClosure
+data TopClosure = TopClosure [(VarName, AType, VType)] TopEnv Term
+  deriving stock (Show)
 
 data Closure = Closure VarName TopEnv LocalEnv Term
+  deriving stock (Show)
 
 newtype Lazy a = Lazy a
 
@@ -47,10 +49,10 @@ eval tenv lenv = \case
   Lam x m n -> VLam (eval tenv lenv m) $ Closure x tenv lenv n
   Pi x m n -> VPi (eval tenv lenv m) $ Closure x tenv lenv n
   Const c ms ->
-    let vs = SL.mapReversed (eval tenv lenv) $ SL.fromListReversed ms
+    let vs = eval tenv lenv <$> ms
      in case lookup c tenv of
           Nothing -> VPrim c (SConstApp vs)
-          Just t -> VConst c (SConstApp vs) (t $$ toList vs)
+          Just t -> VConst c (SConstApp vs) (t $$ vs)
   TLoc (Located {..}) -> eval tenv lenv value
 
 instance Applicable Closure Value Value where
@@ -60,18 +62,18 @@ instance Applicable Closure Value Value where
 
 instance Applicable (Lazy Closure) Value Value where
   -- lazy in the argument
-  (Lazy (Closure x tenv lenv m)) $$ ~n = eval tenv ((x, n) : lenv) m
+  Lazy (Closure x tenv lenv m) $$ ~n = eval tenv ((x, n) : lenv) m
   {-# INLINE ($$) #-}
 
-instance Applicable TopClosure [Value] Value where
+instance Applicable TopClosure (SL.List Value) Value where
   -- assume that the length of xs and vs are the same
   -- strict in the arguments
-  TopClosure xs tenv m $$ vs = eval tenv (zipWith (\(x, ~_, ~_) v -> (x, v)) xs (reverse vs)) m
+  TopClosure xs tenv m $$ vs = eval tenv (zipWith (\(x, ~_, ~_) v -> (x, v)) xs (SL.toListReversed vs)) m
   {-# INLINE ($$) #-}
 
 instance Applicable (Lazy TopClosure) [Value] Value where
   -- lazy in the arguments
-  (Lazy (TopClosure xs tenv m)) $$ vs = eval tenv (zipWith (\(x, ~_, ~_) ~v -> (x, v)) xs (reverse vs)) m
+  Lazy (TopClosure xs tenv m) $$ vs = eval tenv (zipWith (\(x, ~_, ~_) ~v -> (x, v)) xs (reverse vs)) m
   {-# INLINE ($$) #-}
 
 instance Applicable Spine Value Spine where
@@ -84,7 +86,7 @@ instance Applicable Value Value Value where
       go = \case
         VLam _ m' -> m' $$ n
         VVar x sp -> VVar x (sp $$ n)
-        VConst c sp m' -> VConst c (sp $$ n) (m' $$ n)
+        VConst c sp m' -> VConst c (sp $$ n) (go m')
         VPrim c sp -> VPrim c (sp $$ n)
         _ -> error "application of non-function"
   {-# INLINE ($$) #-}
@@ -118,7 +120,7 @@ quoteSpineVar unf lvl x = \case
 quoteSpineConst :: UnfoldTop -> LocalEnv -> ConstName -> Spine -> Term
 quoteSpineConst unf lvl c = \case
   SNil -> error "quoteSpineConst: SNil"
-  SConstApp vs -> Const c $ SL.toListReversed $ SL.mapReversed (quote unf lvl) vs
+  SConstApp vs -> Const c $ quote unf lvl <$> vs
   SApp sp m -> App (quoteSpineConst unf lvl c sp) (quote unf lvl m)
 
 --------------------------------------------------------------------------------

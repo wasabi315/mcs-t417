@@ -4,10 +4,12 @@ import Control.Applicative ((<|>))
 import Control.Exception
 import Control.Monad
 import Data.Foldable
+import Data.Functor
 import Data.HashMap.Strict qualified as HM
 import Data.Maybe
 import Prettyprinter
 import Prettyprinter.Util
+import StrictList qualified as SL
 import T417.AlphaConv
 import T417.Common
 import T417.Evaluation
@@ -45,7 +47,7 @@ data Judgment = Judgment
 instance Pretty Judgment where
   pretty Judgment {..} =
     ";"
-      <+> hsep (reverse $ map (\(x, a, ~_) -> pretty x <> ":" <> pretty a) ctx)
+      <+> hsep (punctuate comma $ reverse $ map (\(x, a, ~_) -> pretty x <> ":" <> pretty a) ctx)
       <+> "⊢"
       <+> pretty term
       <+> ":"
@@ -89,6 +91,11 @@ expectAlphaEqCtx ctx1 ctx2
   | and (zipWith (\(x, a, ~_) (y, b, ~_) -> x == y && alphaConv a b) ctx1 ctx2) = pure ()
   | otherwise = throwError "expected alpha-equivalent contexts"
 
+expectBetaDeltaConv :: Value -> Value -> IO ()
+expectBetaDeltaConv v1 v2
+  | bdConv Rigid v1 v2 = pure ()
+  | otherwise = throwError "expected βδ-convertible"
+
 expectAPi :: AType -> IO (AType, AClosure)
 expectAPi = \case
   APi a b -> pure (a, b)
@@ -120,7 +127,7 @@ verify (Rules rs) = void $ foldlM f (HM.empty, HM.empty, 0) rs
         RConv i j -> verifyConv (lookupJdg i) (lookupJdg j)
         RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
         RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
-        RInst i js p -> verifyInst (lookupJdg i) (map lookupJdg js) p
+        RInst i js p -> verifyInst (lookupJdg i) (lookupJdg <$> js) p
         RCp i -> pure $! lookupJdg i
         RSp i j -> verifySp (lookupJdg i) j
       putDocW 80 $ pretty n <+> ":" <+> pretty jdg <> line
@@ -189,8 +196,7 @@ verifyAppl jdg1 jdg2 = do
       n = toATerm [] jdg2.term
       type_ = b $$ n
       VPi _ vb = jdg1.vtype
-      ~vn = eval jdg2.tenv jdg2.lenv jdg2.term
-      ~vtype = Lazy vb $$ vn
+      ~vtype = Lazy vb $$ eval jdg2.tenv jdg2.lenv jdg2.term
   pure $! jdg1 {term, type_, vtype}
 
 verifyAbst :: Judgment -> Judgment -> IO Judgment
@@ -212,7 +218,7 @@ verifyConv jdg1 jdg2 = do
   expectASort jdg2.type_
   expectAlphaEqCtx jdg1.ctx jdg2.ctx
   let vtype = eval jdg2.tenv jdg2.lenv jdg2.term
-  assert (bdConv Rigid jdg1.vtype vtype) pure ()
+  expectBetaDeltaConv jdg1.vtype vtype
   let type_ = toATerm [] jdg2.term
   pure $! jdg1 {type_, vtype}
 
@@ -238,7 +244,7 @@ verifyDefpr jdg1 jdg2 c = do
       topCtx = (c, acl, cl) : jdg2.topCtx
   pure $! jdg1 {topCtxLen, topCtx}
 
-verifyInst :: Judgment -> [Judgment] -> Int -> IO Judgment
+verifyInst :: Judgment -> SL.List Judgment -> Int -> IO Judgment
 verifyInst jdg jdgs p = do
   expectSort jdg.term
   expectASort jdg.type_
@@ -248,11 +254,19 @@ verifyInst jdg jdgs p = do
     ATopClosure ctx _ ->
       flip assert (pure ()) $
         and $
-          zipWith (\(_, a, ~_) jdg' -> alphaConv a jdg'.type_) ctx (reverse jdgs)
-  let term = Const name $ map (\jdg' -> jdg'.term) jdgs
-      type_ = ty $$ map (\jdg' -> toATerm [] jdg'.term) jdgs
-      ~vtype = Lazy vty $$ map (\jdg' -> eval jdg'.tenv jdg'.lenv jdg'.term) jdgs
+          zipWith (\(_, a, ~_) jdg' -> alphaConv a jdg'.type_) ctx (SL.toListReversed jdgs)
+  let term = Const name $ jdgs <&> \jdg' -> jdg'.term
+      type_ = ty $$ (jdgs <&> \jdg' -> toATerm [] jdg'.term)
+      ~vtype = Lazy vty $$ revMap (\jdg' -> eval jdg'.tenv jdg'.lenv jdg'.term) (SL.toListReversed jdgs)
   pure $! jdg {term, type_, vtype}
+
+revMap :: (a -> b) -> [a] -> [b]
+revMap f = go []
+  where
+    go acc = \case
+      [] -> acc
+      x : xs -> go (f x : acc) xs
+{-# INLINE revMap #-}
 
 verifySp :: Judgment -> Int -> IO Judgment
 verifySp jdg i = do

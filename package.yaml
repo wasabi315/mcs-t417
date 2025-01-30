@@ -52,7 +52,7 @@ library:
   source-dirs: src
 
 executables:
-  type-search-exe:
+  mcs-t417-exe:
     main: Main.hs
     source-dirs: app
     dependencies:
