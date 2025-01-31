@@ -86,7 +86,7 @@ executable mcs-t417-exe
       MultiParamTypeClasses
       FunctionalDependencies
       GADTs
-  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
+  ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields -rtsopts -threaded -with-rtsopts= "-A64M -s -N8"
   build-depends:
       base >=4.17 && <5
     , containers

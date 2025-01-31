@@ -30,8 +30,6 @@ data TopClosure = TopClosure [(VarName, AType, VType)] TopEnv Term
 data Closure = Closure VarName TopEnv LocalEnv Term
   deriving stock (Show)
 
-newtype Lazy a = Lazy a
-
 type VType = Value
 
 type TopEnv = [(ConstName, TopClosure)]
@@ -68,12 +66,12 @@ instance Applicable (Lazy Closure) Value Value where
 instance Applicable TopClosure (SL.List Value) Value where
   -- assume that the length of xs and vs are the same
   -- strict in the arguments
-  TopClosure xs tenv m $$ vs = eval tenv (zipWith (\(x, ~_, ~_) v -> (x, v)) xs (SL.toListReversed vs)) m
+  TopClosure xs tenv m $$ vs = eval tenv (zipWith (\(x, _, _) v -> (x, v)) xs (SL.toListReversed vs)) m
   {-# INLINE ($$) #-}
 
 instance Applicable (Lazy TopClosure) [Value] Value where
   -- lazy in the arguments
-  Lazy (TopClosure xs tenv m) $$ vs = eval tenv (zipWith (\(x, ~_, ~_) ~v -> (x, v)) xs (reverse vs)) m
+  Lazy (TopClosure xs tenv m) $$ vs = eval tenv (zipWith (\(x, _, _) ~v -> (x, v)) xs (reverse vs)) m
   {-# INLINE ($$) #-}
 
 instance Applicable Spine Value Spine where

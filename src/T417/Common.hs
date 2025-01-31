@@ -5,6 +5,7 @@ module T417.Common
     freshen,
     propriocept,
     Applicable (..),
+    Lazy (..),
   )
 where
 
@@ -63,3 +64,5 @@ class Applicable f a b | f a -> b where
 instance Applicable (a -> b) a b where
   f $$ x = f x
   {-# INLINE ($$) #-}
+
+newtype Lazy a = Lazy a

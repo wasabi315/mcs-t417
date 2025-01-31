@@ -28,6 +28,16 @@ data Rule
 newtype Rules = Rules [Rule]
   deriving newtype (Show)
 
+--------------------------------------------------------------------------------
+
+isDefRule :: Rule -> Bool
+isDefRule = \case
+  RDef {} -> True
+  RDefpr {} -> True
+  _ -> False
+
+--------------------------------------------------------------------------------
+
 prettyRule :: Rule -> Doc ann
 prettyRule = \case
   RSort -> "sort"

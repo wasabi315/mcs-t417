@@ -49,6 +49,11 @@ instance Applicable ATopClosure (SL.List ATerm) ATerm where
   ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _, _) n -> (x, n)) xs (SL.toListReversed ns)) m
   {-# INLINE ($$) #-}
 
+instance Applicable ATopClosure [ATerm] ATerm where
+  -- strict in the arguments
+  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _, _) n -> (x, n)) xs (reverse ns)) m
+  {-# INLINE ($$) #-}
+
 instance Applicable AClosure ATerm ATerm where
   AClosure x env m $$ n = toATerm ((x, n) : env) m
   {-# INLINE ($$) #-}

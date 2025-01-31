@@ -57,3 +57,7 @@ executables:
     source-dirs: app
     dependencies:
       - mcs-t417
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts= "-A64M -s -N8"
