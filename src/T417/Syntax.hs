@@ -2,6 +2,7 @@ module T417.Syntax where
 
 import Data.Functor
 import Data.String
+import Mason.Builder
 import Prettyprinter
 import StrictList qualified as SL
 import T417.Common
@@ -41,6 +42,23 @@ newtype Defs = Defs {unDefs :: [Def]}
   deriving newtype (Show)
 
 --------------------------------------------------------------------------------
+
+stringifyTerm :: Term -> Builder
+stringifyTerm = \case
+  Var (VarName x) -> textUtf8 x
+  Type -> char8 '*'
+  Kind -> char8 '@'
+  App m n ->
+    "%(" <> stringifyTerm m <> ")(" <> stringifyTerm n <> ")"
+  Lam (VarName x) m n ->
+    char8 '$' <> textUtf8 x <> ":(" <> stringifyTerm m <> ").(" <> stringifyTerm n <> ")"
+  Pi (VarName x) m n ->
+    char8 '?' <> textUtf8 x <> ":(" <> stringifyTerm m <> ").(" <> stringifyTerm n <> ")"
+  Const (ConstName c) SL.Nil ->
+    textUtf8 c <> "[]"
+  Const (ConstName c) (SL.Cons m ms) ->
+    textUtf8 c <> "[(" <> stringifyTerm m <> char8 ')' <> foldMap (\n -> ",(" <> stringifyTerm n <> ")") ms <> "]"
+  TLoc (Located {value}) -> stringifyTerm value
 
 prettyTerm :: Term -> Doc ann
 prettyTerm = \case

@@ -1,6 +1,7 @@
 module T417.AlphaConv where
 
 import Data.Maybe
+import Mason.Builder
 import Prettyprinter
 import StrictList qualified as SL
 import T417.Common
@@ -25,6 +26,22 @@ data ATopClosure where
 
 data AClosure = AClosure VarName [(VarName, ATerm)] Term
   deriving stock (Show)
+
+stringifyATerm :: ATerm -> Builder
+stringifyATerm = \case
+  AVar (VarName x) -> textUtf8 x
+  AType -> char8 '*'
+  AKind -> char8 '@'
+  AApp m n ->
+    "%(" <> stringifyATerm m <> ")(" <> stringifyATerm n <> ")"
+  ALam m n@(AClosure x@(VarName x') _ _) ->
+    char8 '$' <> textUtf8 x' <> ":(" <> stringifyATerm m <> ").(" <> stringifyATerm (n $$ AVar x) <> ")"
+  APi m n@(AClosure x@(VarName x') _ _) ->
+    char8 '?' <> textUtf8 x' <> ":(" <> stringifyATerm m <> ").(" <> stringifyATerm (n $$ AVar x) <> ")"
+  AConst (ConstName c) SL.Nil ->
+    textUtf8 c <> "[]"
+  AConst (ConstName c) (SL.Cons m ms) ->
+    textUtf8 c <> "[(" <> stringifyATerm m <> char8 ')' <> foldMap (\n -> ",(" <> stringifyATerm n <> ")") ms <> "]"
 
 instance Pretty ATerm where
   pretty a = pretty (fromATerm a)

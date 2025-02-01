@@ -7,9 +7,12 @@ import Data.Foldable
 import Data.Functor
 import Data.HashMap.Strict qualified as HM
 import Data.Maybe
+import Data.Monoid
 import Data.Traversable
+import Mason.Builder
 import Prettyprinter
 import StrictList qualified as SL
+import System.IO (stdout)
 import T417.AlphaConv
 import T417.Common
 import T417.Evaluation
@@ -43,6 +46,26 @@ data Judgment = Judgment
     type_ :: AType,
     vtype :: ~VType
   }
+
+stringifyJudgment :: Judgment -> Builder
+stringifyJudgment Judgment {..} =
+  "; "
+    <> ( case ctx of
+           [] -> mempty
+           (VarName x, a, _) : ctx' ->
+             getDual
+               ( foldMap
+                   (\(VarName y, b, _) -> Dual $ textUtf8 y <> char8 ':' <> stringifyATerm b <> ", ")
+                   ctx'
+               )
+               <> textUtf8 x
+               <> char8 ':'
+               <> stringifyATerm a
+       )
+    <> " ⊢ "
+    <> stringifyTerm term
+    <> " : "
+    <> stringifyATerm type_
 
 instance Pretty Judgment where
   pretty Judgment {..} =
@@ -126,9 +149,9 @@ verify (Rules rs) = void $ foldlM f (HM.empty, HM.empty, 0) rs
         RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
         RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
         RInst i js p -> verifyInst (lookupJdg i) (lookupJdg <$> js) p
-        RCp i -> pure $! lookupJdg i
+        RCp i -> pure (lookupJdg i)
         RSp i j -> verifySp (lookupJdg i) j
-      -- print $ pretty n <+> ":" <+> pretty jdg
+      hPutBuilder stdout $ intDec n <> " : " <> stringifyJudgment jdg <> char8 '\n'
       pure
         if isDefRule rule
           then (HM.insert n jdg tjdgs, ljdgs, n + 1)
@@ -158,7 +181,7 @@ verifyVar jdg v = do
       ctx = (v, type_, vtype) : jdg.ctx
       lenv = (v, VVar v SNil) : jdg.lenv
       term = Var v
-  pure $! jdg {ctxLen, ctx, term, type_, lenv, vtype}
+  pure jdg {ctxLen, ctx, term, type_, lenv, vtype}
 
 verifyWeak :: Judgment -> Judgment -> VarName -> IO Judgment
 verifyWeak jdg1 jdg2 v = do
@@ -170,7 +193,7 @@ verifyWeak jdg1 jdg2 v = do
       ctxLen = jdg1.ctxLen + 1
       ctx = (v, c, vc) : jdg1.ctx
       lenv = (v, VVar v SNil) : jdg1.lenv
-  pure $! jdg1 {ctxLen, ctx, lenv}
+  pure jdg1 {ctxLen, ctx, lenv}
 
 verifyForm :: Judgment -> Judgment -> IO Judgment
 verifyForm jdg1 jdg2 = do
@@ -183,7 +206,7 @@ verifyForm jdg1 jdg2 = do
   let term = Pi x (fromATerm a) jdg2.term
       type_ = jdg2.type_
       ~vtype = jdg2.vtype
-  pure $! jdg1 {term, type_, vtype}
+  pure jdg1 {term, type_, vtype}
 
 verifyAppl :: Judgment -> Judgment -> IO Judgment
 verifyAppl jdg1 jdg2 = do
@@ -195,7 +218,7 @@ verifyAppl jdg1 jdg2 = do
       type_ = b $$ n
       VPi _ vb = jdg1.vtype
       ~vtype = Lazy vb $$ eval jdg2.tenv jdg2.lenv jdg2.term
-  pure $! jdg1 {term, type_, vtype}
+  pure jdg1 {term, type_, vtype}
 
 verifyAbst :: Judgment -> Judgment -> IO Judgment
 verifyAbst jdg1 jdg2 = do
@@ -209,7 +232,7 @@ verifyAbst jdg1 jdg2 = do
   expectAlphaConv jdg1.type_ (b' $$ AVar x)
   expectAlphaConvCtx ctx jdg2.ctx
   let term = Lam x (fromATerm a) jdg1.term
-  pure $! jdg2 {term, type_, vtype}
+  pure jdg2 {term, type_, vtype}
 
 verifyConv :: Judgment -> Judgment -> IO Judgment
 verifyConv jdg1 jdg2 = do
@@ -218,7 +241,7 @@ verifyConv jdg1 jdg2 = do
   let vtype = eval jdg2.tenv jdg2.lenv jdg2.term
   expectBetaDeltaConv jdg1.vtype vtype
   let type_ = toATerm [] jdg2.term
-  pure $! jdg1 {type_, vtype}
+  pure jdg1 {type_, vtype}
 
 verifyDef :: Judgment -> Judgment -> ConstName -> IO Judgment
 verifyDef jdg1 jdg2 c = do
@@ -229,7 +252,7 @@ verifyDef jdg1 jdg2 c = do
       topCtxLen = jdg2.topCtxLen + 1
       topCtx = (c, acl, cl) : jdg2.topCtx
       tenv = (c, TopClosure jdg2.ctx jdg2.tenv jdg2.term) : jdg2.tenv
-  pure $! jdg1 {tenv, topCtxLen, topCtx}
+  pure jdg1 {tenv, topCtxLen, topCtx}
 
 verifyDefpr :: Judgment -> Judgment -> ConstName -> IO Judgment
 verifyDefpr jdg1 jdg2 c = do
@@ -240,7 +263,7 @@ verifyDefpr jdg1 jdg2 c = do
       cl = TopClosure jdg2.ctx jdg2.tenv retTy
       topCtxLen = jdg2.topCtxLen + 1
       topCtx = (c, acl, cl) : jdg2.topCtx
-  pure $! jdg1 {topCtxLen, topCtx}
+  pure jdg1 {topCtxLen, topCtx}
 
 verifyInst :: Judgment -> SL.List Judgment -> Int -> IO Judgment
 verifyInst jdg jdgs p = do
@@ -263,10 +286,10 @@ verifyInst jdg jdgs p = do
       type_ = ty $$ args
       vargs = reverse $ map (\jdg' -> eval jdg'.tenv jdg'.lenv jdg'.term) $ SL.toListReversed jdgs
       ~vtype = Lazy vty $$ vargs
-  pure $! jdg {term, type_, vtype}
+  pure jdg {term, type_, vtype}
 
 verifySp :: Judgment -> Int -> IO Judgment
 verifySp jdg i = do
   let (x, type_, vtype) = jdg.ctx !! (jdg.ctxLen - i - 1)
       term = Var x
-  pure $! jdg {term, type_, vtype}
+  pure jdg {term, type_, vtype}

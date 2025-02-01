@@ -40,13 +40,11 @@ dependencies:
   - megaparsec
   - mtl
   - text
-  - vector
   - prettyprinter
-  - containers
   - strict-list
   - unordered-containers
   - hashable
-  - hashtables
+  - mason
 
 library:
   source-dirs: src

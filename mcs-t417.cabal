@@ -49,16 +49,14 @@ library
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields
   build-depends:
       base >=4.17 && <5
-    , containers
     , hashable
-    , hashtables
+    , mason
     , megaparsec
     , mtl
     , prettyprinter
     , strict-list
     , text
     , unordered-containers
-    , vector
   default-language: GHC2021
 
 executable mcs-t417-exe
@@ -89,9 +87,8 @@ executable mcs-t417-exe
   ghc-options: -Wall -Wno-unused-do-bind -Wmissing-deriving-strategies -O2 -funbox-strict-fields -rtsopts -threaded -with-rtsopts= "-A64M -s -N8"
   build-depends:
       base >=4.17 && <5
-    , containers
     , hashable
-    , hashtables
+    , mason
     , mcs-t417
     , megaparsec
     , mtl
@@ -99,5 +96,4 @@ executable mcs-t417-exe
     , strict-list
     , text
     , unordered-containers
-    , vector
   default-language: GHC2021
