@@ -4,11 +4,9 @@ import Control.Applicative ((<|>))
 import Control.Exception
 import Control.Monad
 import Data.Foldable
-import Data.Functor
 import Data.HashMap.Strict qualified as HM
 import Data.Maybe
 import Data.Monoid
-import Data.Traversable
 import Mason.Builder
 import Prettyprinter
 import StrictList qualified as SL
@@ -133,11 +131,35 @@ expectNonEmpty (x : xs) = pure (x, xs)
 
 --------------------------------------------------------------------------------
 
-verify :: Rules -> IO ()
-verify (Rules rs) = void $ foldlM f (HM.empty, HM.empty, 0) rs
+groupRules :: [RuleWithIx] -> [([RuleWithIx], Maybe RuleWithIx)]
+groupRules = \case
+  [] -> []
+  rs -> let ~(rs', mr, rest) = go rs in (rs', mr) : groupRules rest
   where
-    f (!tjdgs, !ljdgs, !n) rule = do
-      let lookupJdg (RuleIx i) = fromJust $ HM.lookup i ljdgs <|> HM.lookup i tjdgs
+    go = \case
+      [] -> ([], Nothing, [])
+      r@(_, RDef {}) : rs -> ([], Just r, rs)
+      r@(_, RDefpr {}) : rs -> ([], Just r, rs)
+      r : rs -> let ~(rs', mr, rest) = go rs in (r : rs', mr, rest)
+
+verify :: Rules -> IO ()
+verify = \(Rules rs) -> foldM_ f HM.empty $ groupRules rs
+  where
+    f tjdgs (rs, mr) = do
+      ljdgs <- foldlM (g tjdgs) HM.empty rs
+      let lookupJdg i = fromJust $ HM.lookup i ljdgs <|> HM.lookup i tjdgs
+      case mr of
+        Nothing -> pure tjdgs
+        Just (n@(RuleIx n'), r) -> do
+          jdg <- case r of
+            RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
+            RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
+            _ -> error "impossible"
+          hPutBuilder stdout $ intDec n' <> " : " <> stringifyJudgment jdg <> char8 '\n'
+          pure $ HM.insert n jdg tjdgs
+
+    g tjdgs ljdgs (n@(RuleIx n'), rule) = do
+      let lookupJdg i = fromJust $ HM.lookup i ljdgs <|> HM.lookup i tjdgs
       jdg <- case rule of
         RSort -> pure verifySort
         RVar i x -> verifyVar (lookupJdg i) x
@@ -146,16 +168,12 @@ verify (Rules rs) = void $ foldlM f (HM.empty, HM.empty, 0) rs
         RAppl i j -> verifyAppl (lookupJdg i) (lookupJdg j)
         RAbst i j -> verifyAbst (lookupJdg i) (lookupJdg j)
         RConv i j -> verifyConv (lookupJdg i) (lookupJdg j)
-        RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
-        RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
         RInst i js p -> verifyInst (lookupJdg i) (lookupJdg <$> js) p
         RCp i -> pure (lookupJdg i)
         RSp i j -> verifySp (lookupJdg i) j
-      hPutBuilder stdout $ intDec n <> " : " <> stringifyJudgment jdg <> char8 '\n'
-      pure
-        if isDefRule rule
-          then (HM.insert n jdg tjdgs, ljdgs, n + 1)
-          else (tjdgs, HM.insert n jdg ljdgs, n + 1)
+        _ -> error "impossible"
+      hPutBuilder stdout $ intDec n' <> " : " <> stringifyJudgment jdg <> char8 '\n'
+      pure $ HM.insert n jdg ljdgs
 
 verifySort :: Judgment
 verifySort =
@@ -179,7 +197,7 @@ verifyVar jdg v = do
       ~vtype = eval jdg.tenv jdg.lenv jdg.term
       ctxLen = jdg.ctxLen + 1
       ctx = (v, type_, vtype) : jdg.ctx
-      lenv = (v, VVar v SNil) : jdg.lenv
+      lenv = HM.insert v (VVar v SNil) jdg.lenv
       term = Var v
   pure jdg {ctxLen, ctx, term, type_, lenv, vtype}
 
@@ -192,7 +210,7 @@ verifyWeak jdg1 jdg2 v = do
       ~vc = eval jdg2.tenv jdg2.lenv jdg2.term
       ctxLen = jdg1.ctxLen + 1
       ctx = (v, c, vc) : jdg1.ctx
-      lenv = (v, VVar v SNil) : jdg1.lenv
+      lenv = HM.insert v (VVar v SNil) jdg1.lenv
   pure jdg1 {ctxLen, ctx, lenv}
 
 verifyForm :: Judgment -> Judgment -> IO Judgment
@@ -247,11 +265,13 @@ verifyDef :: Judgment -> Judgment -> ConstName -> IO Judgment
 verifyDef jdg1 jdg2 c = do
   expectFreshConst jdg1.topCtx c
   let retTy = fromATerm jdg2.type_
-      acl = ATopClosure jdg2.ctx retTy
-      cl = TopClosure jdg2.ctx jdg2.tenv retTy
+      ctx' = map (\(x, a, _) -> (x, a)) jdg2.ctx
+      acl = ATopClosure ctx' retTy
+      vars = map (\(x, _, _) -> x) jdg2.ctx
+      cl = TopClosure vars jdg2.tenv retTy
       topCtxLen = jdg2.topCtxLen + 1
       topCtx = (c, acl, cl) : jdg2.topCtx
-      tenv = (c, TopClosure jdg2.ctx jdg2.tenv jdg2.term) : jdg2.tenv
+      tenv = HM.insert c (TopClosure vars jdg2.tenv jdg2.term) jdg2.tenv
   pure jdg1 {tenv, topCtxLen, topCtx}
 
 verifyDefpr :: Judgment -> Judgment -> ConstName -> IO Judgment
@@ -259,32 +279,29 @@ verifyDefpr jdg1 jdg2 c = do
   expectFreshConst jdg1.topCtx c
   expectASort jdg2.type_
   let retTy = jdg2.term
-      acl = ATopClosure jdg2.ctx retTy
-      cl = TopClosure jdg2.ctx jdg2.tenv retTy
+      ctx' = map (\(x, a, _) -> (x, a)) jdg2.ctx
+      acl = ATopClosure ctx' retTy
+      vars = map (\(x, _, _) -> x) jdg2.ctx
+      cl = TopClosure vars jdg2.tenv retTy
       topCtxLen = jdg2.topCtxLen + 1
       topCtx = (c, acl, cl) : jdg2.topCtx
   pure jdg1 {topCtxLen, topCtx}
 
-verifyInst :: Judgment -> SL.List Judgment -> Int -> IO Judgment
+verifyInst :: Judgment -> [Judgment] -> Int -> IO Judgment
 verifyInst jdg jdgs p = do
   expectSort jdg.term
   expectASort jdg.type_
-  let (name, ty, vty) = jdg.topCtx !! (jdg.topCtxLen - p - 1)
-  (_, args) <- case ty of
-    ATopClosure ctx _ -> do
-      mapAccumM
-        ( \env (jdg', (x, a, _)) -> do
-            let a' = toATerm env (fromATerm a)
-                t = toATerm [] jdg'.term
-                e' = (x, t) : env
-            expectAlphaConv a' jdg'.type_
-            pure (e', t)
-        )
-        []
-        (zip (toList jdgs) (reverse ctx))
-  let term = Const name $ jdgs <&> \jdg' -> jdg'.term
+  let (name, ty@(ATopClosure (reverse -> ctxRev) _), vty) =
+        jdg.topCtx !! (jdg.topCtxLen - p - 1)
+      args = map (\jdg' -> toATerm [] jdg'.term) jdgs
+      env = zipWith (\(x, _) arg -> (x, arg)) ctxRev args
+  zipWithM_
+    (\jdg' (_, a) -> expectAlphaConv (toATerm env (fromATerm a)) jdg'.type_)
+    jdgs
+    ctxRev
+  let term = Const name $ SL.mapReversed (\jdg' -> jdg'.term) $ SL.fromListReversed jdgs
       type_ = ty $$ args
-      vargs = reverse $ map (\jdg' -> eval jdg'.tenv jdg'.lenv jdg'.term) $ SL.toListReversed jdgs
+      vargs = map (\jdg' -> eval jdg'.tenv jdg'.lenv jdg'.term) jdgs
       ~vtype = Lazy vty $$ vargs
   pure jdg {term, type_, vtype}
 

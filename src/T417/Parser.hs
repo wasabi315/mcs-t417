@@ -122,7 +122,7 @@ pRule =
 
 pRules :: Parser Rules
 pRules = do
-  rs <- some (decimal @Int *> pRule)
+  rs <- some $ liftM2 (,) decimal pRule
   pure $ Rules rs
 
 parseRules :: FilePath -> Text -> Either (ParseErrorBundle Text Void) Rules

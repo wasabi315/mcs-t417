@@ -21,8 +21,7 @@ data ATerm
 
 type AType = ATerm
 
-data ATopClosure where
-  ATopClosure :: [(VarName, AType, a)] -> Term -> ATopClosure
+data ATopClosure = ATopClosure [(VarName, AType)] Term
 
 data AClosure = AClosure VarName [(VarName, ATerm)] Term
   deriving stock (Show)
@@ -63,12 +62,12 @@ toATerm env = \case
 
 instance Applicable ATopClosure (SL.List ATerm) ATerm where
   -- strict in the arguments
-  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _, _) n -> (x, n)) xs (SL.toListReversed ns)) m
+  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _) n -> (x, n)) xs (SL.toListReversed ns)) m
   {-# INLINE ($$) #-}
 
 instance Applicable ATopClosure [ATerm] ATerm where
   -- strict in the arguments
-  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _, _) n -> (x, n)) xs (reverse ns)) m
+  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _) n -> (x, n)) xs (reverse ns)) m
   {-# INLINE ($$) #-}
 
 instance Applicable AClosure ATerm ATerm where

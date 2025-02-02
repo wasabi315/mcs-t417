@@ -1,8 +1,9 @@
 module T417.Evaluation where
 
+import Data.HashMap.Strict (HashMap)
+import Data.HashMap.Strict qualified as HM
 import Data.Maybe
 import StrictList qualified as SL
-import T417.AlphaConv
 import T417.Common
 import T417.Syntax
 
@@ -24,7 +25,7 @@ data Spine
   | SApp Spine Value
   deriving stock (Show)
 
-data TopClosure = TopClosure [(VarName, AType, VType)] TopEnv Term
+data TopClosure = TopClosure [VarName] TopEnv Term
   deriving stock (Show)
 
 data Closure = Closure VarName TopEnv LocalEnv Term
@@ -32,15 +33,15 @@ data Closure = Closure VarName TopEnv LocalEnv Term
 
 type VType = Value
 
-type TopEnv = [(ConstName, TopClosure)]
+type TopEnv = HashMap ConstName TopClosure
 
-type LocalEnv = [(VarName, Value)]
+type LocalEnv = HashMap VarName Value
 
 --------------------------------------------------------------------------------
 
 eval :: TopEnv -> LocalEnv -> Term -> Value
 eval tenv lenv = \case
-  Var x -> fromJust $ lookup x lenv
+  Var x -> fromJust $ HM.lookup x lenv
   Type -> VType
   Kind -> VKind
   App m n -> eval tenv lenv m $$ eval tenv lenv n
@@ -48,30 +49,30 @@ eval tenv lenv = \case
   Pi x m n -> VPi (eval tenv lenv m) $ Closure x tenv lenv n
   Const c ms ->
     let vs = eval tenv lenv <$> ms
-     in case lookup c tenv of
+     in case HM.lookup c tenv of
           Nothing -> VPrim c (SConstApp vs)
           Just t -> VConst c (SConstApp vs) (t $$ vs)
   TLoc (Located {..}) -> eval tenv lenv value
 
 instance Applicable Closure Value Value where
   -- strict in the argument
-  Closure x tenv lenv m $$ n = eval tenv ((x, n) : lenv) m
+  Closure x tenv lenv m $$ n = eval tenv (HM.insert x n lenv) m
   {-# INLINE ($$) #-}
 
 instance Applicable (Lazy Closure) Value Value where
   -- lazy in the argument
-  Lazy (Closure x tenv lenv m) $$ ~n = eval tenv ((x, n) : lenv) m
+  Lazy (Closure x tenv lenv m) $$ ~n = eval tenv (HM.insert x n lenv) m
   {-# INLINE ($$) #-}
 
 instance Applicable TopClosure (SL.List Value) Value where
   -- assume that the length of xs and vs are the same
   -- strict in the arguments
-  TopClosure xs tenv m $$ vs = eval tenv (zipWith (\(x, _, _) v -> (x, v)) xs (SL.toListReversed vs)) m
+  TopClosure xs tenv m $$ vs = eval tenv (HM.fromList (zip xs (SL.toListReversed vs))) m
   {-# INLINE ($$) #-}
 
 instance Applicable (Lazy TopClosure) [Value] Value where
   -- lazy in the arguments
-  Lazy (TopClosure xs tenv m) $$ vs = eval tenv (zipWith (\(x, _, _) ~v -> (x, v)) xs (reverse vs)) m
+  Lazy (TopClosure xs tenv m) $$ vs = eval tenv (HM.fromList (zip xs (reverse vs))) m
   {-# INLINE ($$) #-}
 
 instance Applicable Spine Value Spine where
@@ -104,10 +105,10 @@ quote unf lenv = \case
   VKind -> Kind
   VLam m n@(Closure (freshen -> x) _ _ _) ->
     let v = VVar x SNil
-     in Lam x (quote unf lenv m) (quote unf ((x, v) : lenv) $ n $$ v)
+     in Lam x (quote unf lenv m) (quote unf (HM.insert x v lenv) $ n $$ v)
   VPi a b@(Closure (freshen -> x) _ _ _) ->
     let v = VVar x SNil
-     in Pi x (quote unf lenv a) (quote unf ((x, v) : lenv) $ b $$ v)
+     in Pi x (quote unf lenv a) (quote unf (HM.insert x v lenv) $ b $$ v)
 
 quoteSpineVar :: UnfoldTop -> LocalEnv -> VarName -> Spine -> Term
 quoteSpineVar unf lvl x = \case

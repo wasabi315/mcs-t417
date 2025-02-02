@@ -2,7 +2,6 @@ module T417.Rule where
 
 import Data.Hashable
 import Prettyprinter
-import StrictList qualified as SL
 import T417.Common
 
 --------------------------------------------------------------------------------
@@ -20,12 +19,14 @@ data Rule
   | RConv RuleIx RuleIx
   | RDef RuleIx RuleIx ConstName
   | RDefpr RuleIx RuleIx ConstName
-  | RInst RuleIx (SL.List RuleIx) Int
+  | RInst RuleIx [RuleIx] Int
   | RCp RuleIx
   | RSp RuleIx Int
   deriving stock (Show)
 
-newtype Rules = Rules [Rule]
+type RuleWithIx = (RuleIx, Rule)
+
+newtype Rules = Rules [RuleWithIx]
   deriving newtype (Show)
 
 --------------------------------------------------------------------------------
@@ -50,7 +51,7 @@ prettyRule = \case
   RDef i j c -> "def" <+> pretty i <+> pretty j <+> pretty c
   RDefpr i j c -> "defpr" <+> pretty i <+> pretty j <+> pretty c
   RInst i js p ->
-    "inst" <+> pretty i <+> pretty (length js) <+> hsep (SL.toListReversed $ SL.mapReversed pretty js) <+> pretty p
+    "inst" <+> pretty i <+> pretty (length js) <+> hsep (pretty <$> js) <+> pretty p
   RCp i -> "cp" <+> pretty i
   RSp i j -> "sp" <+> pretty i <+> pretty j
 
