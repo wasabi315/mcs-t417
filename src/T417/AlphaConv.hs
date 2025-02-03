@@ -1,5 +1,7 @@
 module T417.AlphaConv where
 
+import Data.HashMap.Strict (HashMap)
+import Data.HashMap.Strict qualified as HM
 import Data.Maybe
 import Mason.Builder
 import Prettyprinter
@@ -23,7 +25,7 @@ type AType = ATerm
 
 data ATopClosure = ATopClosure [(VarName, AType)] Term
 
-data AClosure = AClosure VarName [(VarName, ATerm)] Term
+data AClosure = AClosure VarName (HashMap VarName ATerm) Term
   deriving stock (Show)
 
 stringifyATerm :: ATerm -> Builder
@@ -49,9 +51,9 @@ instance Applicable ATerm ATerm ATerm where
   m $$ n = AApp m n
   {-# INLINE ($$) #-}
 
-toATerm :: [(VarName, ATerm)] -> Term -> ATerm
+toATerm :: HashMap VarName ATerm -> Term -> ATerm
 toATerm env = \case
-  Var x -> fromMaybe (AVar x) $ lookup x env
+  Var x -> fromMaybe (AVar x) $ HM.lookup x env
   Type -> AType
   Kind -> AKind
   App m n -> toATerm env m $$ toATerm env n
@@ -62,16 +64,18 @@ toATerm env = \case
 
 instance Applicable ATopClosure (SL.List ATerm) ATerm where
   -- strict in the arguments
-  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _) n -> (x, n)) xs (SL.toListReversed ns)) m
+  ATopClosure xs m $$ ns =
+    toATerm (HM.fromList $ zipWith (\(x, _) n -> (x, n)) xs (SL.toListReversed ns)) m
   {-# INLINE ($$) #-}
 
 instance Applicable ATopClosure [ATerm] ATerm where
   -- strict in the arguments
-  ATopClosure xs m $$ ns = toATerm (zipWith (\(x, _) n -> (x, n)) xs (reverse ns)) m
+  ATopClosure xs m $$ ns =
+    toATerm (HM.fromList $ zipWith (\(x, _) n -> (x, n)) xs (reverse ns)) m
   {-# INLINE ($$) #-}
 
 instance Applicable AClosure ATerm ATerm where
-  AClosure x env m $$ n = toATerm ((x, n) : env) m
+  AClosure x env m $$ n = toATerm (HM.insert x n env) m
   {-# INLINE ($$) #-}
 
 fromATerm :: ATerm -> Term

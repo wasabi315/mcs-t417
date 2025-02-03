@@ -76,57 +76,59 @@ instance Pretty Judgment where
 
 --------------------------------------------------------------------------------
 
-expectSort :: Type -> IO ()
+type M = Either String
+
+expectSort :: Type -> M ()
 expectSort = \case
   Type -> pure ()
   Kind -> pure ()
-  _ -> throwError "expected sort"
+  _ -> Left "expected sort"
 
-expectASort :: AType -> IO ()
+expectASort :: AType -> M ()
 expectASort = \case
   AType -> pure ()
   AKind -> pure ()
-  _ -> throwError "expected sort"
+  _ -> Left "expected sort"
 
-expectFresh :: [(VarName, a, b)] -> VarName -> IO ()
+expectFresh :: [(VarName, a, b)] -> VarName -> M ()
 expectFresh = \cases
   [] _ -> pure ()
   ((v, _, _) : ctx) v'
-    | v == v' -> throwError "expected fresh"
+    | v == v' -> Left "expected fresh"
     | otherwise -> expectFresh ctx v'
 
-expectFreshConst :: [(ConstName, a, b)] -> ConstName -> IO ()
+expectFreshConst :: [(ConstName, a, b)] -> ConstName -> M ()
 expectFreshConst = \cases
   [] _ -> pure ()
   ((c, _, _) : defs) c'
-    | c == c' -> throwError "expected fresh"
+    | c == c' -> Left "expected fresh"
     | otherwise -> expectFreshConst defs c
 
-expectAlphaConv :: ATerm -> ATerm -> IO ()
+expectAlphaConv :: ATerm -> ATerm -> M ()
 expectAlphaConv t u
   | alphaConv t u = pure ()
-  | otherwise = throwError "expected alpha-equivalent"
+  | otherwise = Left "expected alpha-equivalent"
 
-expectAlphaConvCtx :: [(VarName, AType, a)] -> [(VarName, AType, a)] -> IO ()
+expectAlphaConvCtx :: [(VarName, AType, a)] -> [(VarName, AType, a)] -> M ()
 expectAlphaConvCtx = zipWithM_ (\(x, a, _) (y, b, _) -> expectSameVar x y *> expectAlphaConv a b)
 
-expectBetaDeltaConv :: Value -> Value -> IO ()
+expectBetaDeltaConv :: Value -> Value -> M ()
 expectBetaDeltaConv v1 v2
   | bdConv Rigid v1 v2 = pure ()
-  | otherwise = throwError "expected βδ-convertible"
+  | otherwise = Left "expected βδ-convertible"
 
-expectAPi :: AType -> IO (AType, AClosure)
+expectAPi :: AType -> M (AType, AClosure)
 expectAPi = \case
   APi a b -> pure (a, b)
-  _ -> throwError "expected Pi"
+  _ -> Left "expected Pi"
 
-expectSameVar :: VarName -> VarName -> IO ()
+expectSameVar :: VarName -> VarName -> M ()
 expectSameVar x y
   | x == y = pure ()
-  | otherwise = throwError "expected same variable"
+  | otherwise = Left "expected same variable"
 
-expectNonEmpty :: [a] -> IO (a, [a])
-expectNonEmpty [] = throwError "expected non-empty list"
+expectNonEmpty :: [a] -> M (a, [a])
+expectNonEmpty [] = Left "expected non-empty list"
 expectNonEmpty (x : xs) = pure (x, xs)
 
 --------------------------------------------------------------------------------
@@ -151,16 +153,16 @@ verify = \(Rules rs) -> foldM_ f HM.empty $ groupRules rs
       case mr of
         Nothing -> pure tjdgs
         Just (n@(RuleIx n'), r) -> do
-          jdg <- case r of
+          jdg <- either throwError pure case r of
             RDef i j c -> verifyDef (lookupJdg i) (lookupJdg j) c
             RDefpr i j c -> verifyDefpr (lookupJdg i) (lookupJdg j) c
             _ -> error "impossible"
           hPutBuilder stdout $ intDec n' <> " : " <> stringifyJudgment jdg <> char8 '\n'
           pure $ HM.insert n jdg tjdgs
 
-    g tjdgs ljdgs (n@(RuleIx n'), rule) = do
+    g tjdgs ljdgs (n@(RuleIx n'), r) = do
       let lookupJdg i = fromJust $ HM.lookup i ljdgs <|> HM.lookup i tjdgs
-      jdg <- case rule of
+      jdg <- either throwError pure case r of
         RSort -> pure verifySort
         RVar i x -> verifyVar (lookupJdg i) x
         RWeak i j x -> verifyWeak (lookupJdg i) (lookupJdg j) x
@@ -189,7 +191,7 @@ verifySort =
       vtype = VKind
     }
 
-verifyVar :: Judgment -> VarName -> IO Judgment
+verifyVar :: Judgment -> VarName -> M Judgment
 verifyVar jdg v = do
   expectASort jdg.type_
   expectFresh jdg.ctx v
@@ -201,7 +203,7 @@ verifyVar jdg v = do
       term = Var v
   pure jdg {ctxLen, ctx, term, type_, lenv, vtype}
 
-verifyWeak :: Judgment -> Judgment -> VarName -> IO Judgment
+verifyWeak :: Judgment -> Judgment -> VarName -> M Judgment
 verifyWeak jdg1 jdg2 v = do
   expectASort jdg2.type_
   expectAlphaConvCtx jdg1.ctx jdg2.ctx
@@ -213,7 +215,7 @@ verifyWeak jdg1 jdg2 v = do
       lenv = HM.insert v (VVar v SNil) jdg1.lenv
   pure jdg1 {ctxLen, ctx, lenv}
 
-verifyForm :: Judgment -> Judgment -> IO Judgment
+verifyForm :: Judgment -> Judgment -> M Judgment
 verifyForm jdg1 jdg2 = do
   expectASort jdg1.type_
   expectASort jdg2.type_
@@ -226,7 +228,7 @@ verifyForm jdg1 jdg2 = do
       ~vtype = jdg2.vtype
   pure jdg1 {term, type_, vtype}
 
-verifyAppl :: Judgment -> Judgment -> IO Judgment
+verifyAppl :: Judgment -> Judgment -> M Judgment
 verifyAppl jdg1 jdg2 = do
   (a, b) <- expectAPi jdg1.type_
   expectAlphaConv a jdg2.type_
@@ -238,7 +240,7 @@ verifyAppl jdg1 jdg2 = do
       ~vtype = Lazy vb $$ eval jdg2.tenv jdg2.lenv jdg2.term
   pure jdg1 {term, type_, vtype}
 
-verifyAbst :: Judgment -> Judgment -> IO Judgment
+verifyAbst :: Judgment -> Judgment -> M Judgment
 verifyAbst jdg1 jdg2 = do
   expectASort jdg2.type_
   ((x, a, _), ctx) <- expectNonEmpty jdg1.ctx
@@ -252,7 +254,7 @@ verifyAbst jdg1 jdg2 = do
   let term = Lam x (fromATerm a) jdg1.term
   pure jdg2 {term, type_, vtype}
 
-verifyConv :: Judgment -> Judgment -> IO Judgment
+verifyConv :: Judgment -> Judgment -> M Judgment
 verifyConv jdg1 jdg2 = do
   expectASort jdg2.type_
   expectAlphaConvCtx jdg1.ctx jdg2.ctx
@@ -261,7 +263,7 @@ verifyConv jdg1 jdg2 = do
   let type_ = toATerm [] jdg2.term
   pure jdg1 {type_, vtype}
 
-verifyDef :: Judgment -> Judgment -> ConstName -> IO Judgment
+verifyDef :: Judgment -> Judgment -> ConstName -> M Judgment
 verifyDef jdg1 jdg2 c = do
   expectFreshConst jdg1.topCtx c
   let retTy = fromATerm jdg2.type_
@@ -274,7 +276,7 @@ verifyDef jdg1 jdg2 c = do
       tenv = HM.insert c (TopClosure vars jdg2.tenv jdg2.term) jdg2.tenv
   pure jdg1 {tenv, topCtxLen, topCtx}
 
-verifyDefpr :: Judgment -> Judgment -> ConstName -> IO Judgment
+verifyDefpr :: Judgment -> Judgment -> ConstName -> M Judgment
 verifyDefpr jdg1 jdg2 c = do
   expectFreshConst jdg1.topCtx c
   expectASort jdg2.type_
@@ -287,14 +289,14 @@ verifyDefpr jdg1 jdg2 c = do
       topCtx = (c, acl, cl) : jdg2.topCtx
   pure jdg1 {topCtxLen, topCtx}
 
-verifyInst :: Judgment -> [Judgment] -> Int -> IO Judgment
+verifyInst :: Judgment -> [Judgment] -> Int -> M Judgment
 verifyInst jdg jdgs p = do
   expectSort jdg.term
   expectASort jdg.type_
   let (name, ty@(ATopClosure (reverse -> ctxRev) _), vty) =
         jdg.topCtx !! (jdg.topCtxLen - p - 1)
       args = map (\jdg' -> toATerm [] jdg'.term) jdgs
-      env = zipWith (\(x, _) arg -> (x, arg)) ctxRev args
+      env = HM.fromList $ zipWith (\(x, _) arg -> (x, arg)) ctxRev args
   zipWithM_
     (\jdg' (_, a) -> expectAlphaConv (toATerm env (fromATerm a)) jdg'.type_)
     jdgs
@@ -305,7 +307,7 @@ verifyInst jdg jdgs p = do
       ~vtype = Lazy vty $$ vargs
   pure jdg {term, type_, vtype}
 
-verifySp :: Judgment -> Int -> IO Judgment
+verifySp :: Judgment -> Int -> M Judgment
 verifySp jdg i = do
   let (x, type_, vtype) = jdg.ctx !! (jdg.ctxLen - i - 1)
       term = Var x
